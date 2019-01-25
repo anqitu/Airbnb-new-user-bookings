@@ -1,7 +1,7 @@
 # Ideas:
 # - NDCG formula?
 # - Time Series?
-# - Fine tuning
+# - Feature Selection & Fine tuning
 # - Stack Meta Data
 # - Compare Performance
 
@@ -59,7 +59,7 @@ def current_time():
 
 # Loading data -----------------------------------------------------------------
 # train_users = pd.read_csv(TRAIN_PATH)
-train_users = pd.read_csv(TRAIN_PATH, nrows=20000)
+train_users = pd.read_csv(TRAIN_PATH, nrows=10000)
 test_users = pd.read_csv(TEST_PATH)
 # sessions = pd.read_csv(SESSIONS_PATH)
 # age_gender_bkts = pd.read_csv(AGE_GENDER_PATH)
