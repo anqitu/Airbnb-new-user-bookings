@@ -8,6 +8,7 @@
 import os
 os.getcwd()
 WORKING_DIR = '/Users/anqitu/Workspaces/NTU/Airbnb-new-user-bookings'
+# WORKING_DIR = '/content'
 os.listdir(WORKING_DIR)
 
 # import libraries
@@ -33,12 +34,9 @@ pd.set_option('display.max_columns', 500)
 pd.options.display.float_format = '{:,.5f}'.format
 
 SEED = 2019
-TRAIN_PATH = os.path.join(WORKING_DIR, 'raw_data/train_users.csv')
-TEST_PATH = os.path.join(WORKING_DIR, 'raw_data/test_users.csv')
+USERS_PATH = os.path.join(WORKING_DIR, 'raw_data/users.csv') if WORKING_DIR == '/Users/anqitu/Workspaces/NTU/Airbnb-new-user-bookings' else os.path.join(WORKING_DIR, 'users.csv')
 SESSIONS_PATH = os.path.join(WORKING_DIR, 'raw_data/sessions.csv')
-AGE_GENDER_PATH = os.path.join(WORKING_DIR, 'raw_data/age_gender_bkts.csv')
 COUNTRIES_PATH = os.path.join(WORKING_DIR, 'raw_data/countries.csv')
-SAMPLE_SUBMISSION_PATH = os.path.join(WORKING_DIR, 'raw_data/sample_submission_NDF.csv')
 
 categorical_features = [
     'affiliate_channel',
@@ -58,24 +56,16 @@ def current_time():
     return str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 # Loading data -----------------------------------------------------------------
-# train_users = pd.read_csv(TRAIN_PATH)
-train_users = pd.read_csv(TRAIN_PATH, nrows=10000)
-test_users = pd.read_csv(TEST_PATH)
+users = pd.read_csv(USERS_PATH)
+users = users.sample(5000)
 # sessions = pd.read_csv(SESSIONS_PATH)
-# age_gender_bkts = pd.read_csv(AGE_GENDER_PATH)
 # countries = pd.read_csv(COUNTRIES_PATH)
-# sample_submission_NDF = pd.read_csv(SAMPLE_SUBMISSION_PATH)
 
 # Prepare Data (Clean + Engineer) ----------------------------------------------
-train_users['data'] = 'train'
-test_users['data'] = 'test'
-
-users = pd.concat([train_users, test_users])
-
 # Convert '-unknown-' to 'NA'
-users['gender'].replace('-unknown-', 'NA', inplace=True)
-users['language'].replace('-unknown-', 'NA', inplace=True)
-users['first_browser'].replace('-unknown-', 'NA', inplace=True)
+# users['gender'].replace('-unknown-', 'NA', inplace=True)
+# users['language'].replace('-unknown-', 'NA', inplace=True)
+# users['first_browser'].replace('-unknown-', 'NA', inplace=True)
 # display_category_counts(data = users, categorical_features = categorical_features)
 
 # Convert na for  'first_affiliate_tracked' as 'untracked' which is the most common one.
@@ -90,28 +80,30 @@ users.loc[users['age'] > 95, 'age'] = np.nan
 users.loc[users['age'] < 15, 'age'] = np.nan
 # users.age.describe()
 
-# Convert to datetime object
-users['date_account_created'] = pd.to_datetime(users['date_account_created'])
-users['date_first_active'] = pd.to_datetime((users['timestamp_first_active'] // 1000000), format='%Y%m%d')
-users.drop(columns = ['timestamp_first_active'], inplace=True)
+# # Convert to datetime object
+# users['date_account_created'] = pd.to_datetime(users['date_account_created'])
+# users['date_first_active'] = pd.to_datetime((users['timestamp_first_active'] // 1000000), format='%Y%m%d')
+# users.drop(columns = ['timestamp_first_active'], inplace=True)
+#
+# # Extract year, month and day from datetime
+# users['date_account_created_year'] = users['date_account_created'].dt.year
+# users['date_account_created_month'] = users['date_account_created'].dt.month
+# # users['date_account_created_dayofyear'] = users['date_account_created'].dt.dayofyear
+# users['date_account_created_day_count'] = (users['date_account_created'] - users['date_account_created'].min()).dt.days
+# min_year = users['date_account_created'].min().year
+# min_month = users['date_account_created'].min().month
+# users['date_account_created' + '_month_count'] = users['date_account_created' + '_month'] + (users['date_account_created' + '_year'] - min_year) * 12 - min_month + 1
+#
+#
+# users['date_first_active_year'] = users['date_first_active'].dt.year
+# users['date_first_active_month'] = users['date_first_active'].dt.month
+# # users['date_first_active_dayofyear'] = users['date_first_active'].dt.dayofyear
+# users['date_first_active_day_count'] = (users['date_first_active'] - users['date_first_active'].min()).dt.days
+# min_year = users['date_first_active'].min().year
+# min_month = users['date_first_active'].min().month
+# users['date_first_active' + '_month_count'] = users['date_first_active' + '_month'] + (users['date_first_active' + '_year'] - min_year) * 12 - min_month + 1
 
-# Extract year, month and day from datetime
-users['date_account_created_year'] = users['date_account_created'].dt.year
-users['date_account_created_month'] = users['date_account_created'].dt.month
-# users['date_account_created_dayofyear'] = users['date_account_created'].dt.dayofyear
-users['date_account_created_day'] = (users['date_account_created'] - users['date_account_created'].min()).dt.days
-
-users['date_first_active_year'] = users['date_first_active'].dt.year
-users['date_first_active_month'] = users['date_first_active'].dt.month
-# users['date_first_active_dayofyear'] = users['date_first_active'].dt.dayofyear
-users['date_first_active_day'] = (users['date_first_active'] - users['date_first_active'].min()).dt.days
-
-# users['date_first_booking_year'] = users['date_first_booking'].dt.year
-# users['date_first_booking_month'] = users['date_first_booking'].dt.month
-# users['date_first_booking_dayofyear'] = users['date_first_booking'].dt.dayofyear
-# users['date_first_booking_day'] = (users['date_first_booking'] - users['date_first_booking'].min()).dt.days
-
-categorical_features = categorical_features + ['date_account_created_year', 'date_account_created_month', 'date_first_active_year', 'date_first_active_month']
+# categorical_features = categorical_features + ['date_account_created_year', 'date_account_created_month', 'date_first_active_year', 'date_first_active_month']
 
 
 # Create a has_age column
@@ -126,25 +118,13 @@ users['age_bkt'].replace(np.nan, 'NA', inplace = True)
 categorical_features.append('age_bkt')
 
 
+
 # Modelling --------------------------------------------------------------------
 # Useful Functions
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-def score(true, pred):
-    scores = {
-    'accuracy_score': accuracy_score(true, pred),
-    'precision_score': precision_score(true, pred, average='weighted'),
-    'recall_score': recall_score(true, pred, average='weighted'),
-    'f1_score': f1_score(true, pred, average='weighted'),
-    #  NDCG (Normalized discounted cumulative gain) @k
-    }
-    return scores
+from sklearn.metrics import accuracy_score, confusion_matrix
 
 import itertools
-def plot_confusion_matrix(cm, classes,
-                          normalize=False,
-                          title='Confusion matrix',
-                          cmap=plt.cm.Blues):
-
+def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix', cmap=plt.cm.Blues, path = 'test'):
     plt.imshow(cm, interpolation='nearest', cmap=cmap)
     plt.title(title)
     plt.colorbar()
@@ -162,177 +142,284 @@ def plot_confusion_matrix(cm, classes,
     plt.tight_layout()
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
+    plt.savefig(path)
+    plt.close()
+
+def get_matrix(y_test, y_test_pred, y_train, y_train_pred, estimator_name, label_encoder, transformed = ''):
+    title = 'Confusion Matrix for ' + estimator_name + ' Test'
+    if transformed != '':
+        title += ' (Transformed)'
+    df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_test), name='True'), pd.Series(label_encoder.inverse_transform(y_test_pred), name='Predict'))
+    path = title.replace(' ', '_').replace('(', '').replace(')', '')
+    df_confusion.to_csv(path + '.csv')
+    plot_confusion_matrix(confusion_matrix(y_test, y_test_pred), label_encoder.classes_, path = path, title = title)
+
+    title = 'Confusion Matrix for ' + estimator_name  + ' Train'
+    if transformed != '':
+        title += ' (Transformed)'
+    df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_train), name='True'), pd.Series(label_encoder.inverse_transform(y_train_pred), name='Predict'))
+    path = title.replace(' ', '_').replace('(', '').replace(')', '')
+    df_confusion.to_csv(path + '.csv')
+    plot_confusion_matrix(confusion_matrix(y_train, y_train_pred), label_encoder.classes_, path = path, title = title)
 
 
-# Split data into train and test
-from sklearn.model_selection import train_test_split
-users_encoded = pd.get_dummies(users, columns = categorical_features)
-train_encoded = users_encoded[users_encoded['data'] == 'train']
-test_encoded = users_encoded[users_encoded['data'] == 'test']
 
-y = train_encoded['country_destination']
+def plot_estimator_no_feature_vs_accuracy_score(rfecv_result, estimator):
+    # Plot number of features VS. cross-validation scores
+    plt.figure()
+    plt.xlabel("Number of features selected")
+    plt.ylabel("Cross validation score (nb of correct classifications)")
+    plt.plot(range(1, len(rfecv_result.grid_scores_) + 1), rfecv_result.grid_scores_)
+    plt.ylim([0.56,0.64])
+    title = 'Number of Features vs Accuracy Score for ' + estimator.__class__.__name__
+    plt.title(title)
+    plt.savefig(title.replace(' ', '_'))
+    plt.close()
+
+def save_label_encoder(label_encoder):
+    np.save('label_encoder.npy', label_encoder.classes_)
+
+def load_label_encoder():
+    label_encoder = LabelEncoder()
+    label_encoder.classes_ = np.load('label_encoder.npy')
+    return label_encoder
+
+def train_clf(clf, x_train, x_test, x_val, transformed = ''):
+    clf_name = clf.__class__.__name__
+
+    print(current_time() + ': Start training ' + clf_name)
+    start_total = time.perf_counter()
+    clf.fit(x_train, y_train)
+    run_total = time.perf_counter() - start_total
+    print(current_time() + ': Finish training ' + clf_name)
+    run_times_df[clf_name + transformed] = [run_total]
+
+    y_train_pred = clf.predict(x_train)
+    y_test_pred = clf.predict(x_test)
+    y_val_pred = clf.predict(x_val)
+    train_result_df['y_train_pred_' + clf_name + transformed] = y_train_pred
+    test_result_df['y_test_pred_' + clf_name + transformed] = y_test_pred
+    val_result_df['y_val_pred_' + clf_name + transformed] = y_val_pred
+
+    accuracy_scores = []
+    accuracy_scores.append(accuracy_score(y_train_pred, y_train))
+    accuracy_scores.append(accuracy_score(y_test_pred, y_test))
+    pd.DataFrame(clf.predict_proba(x_train)).to_csv("Prob_Train_{}{}.csv".format(clf_name, transformed), index = False)
+    pd.DataFrame(clf.predict_proba(x_test)).to_csv("Prob_Test_{}{}.csv".format(clf_name, transformed), index = False)
+    pd.DataFrame(clf.predict_proba(x_val)).to_csv("Prob_Val_{}{}.csv".format(clf_name, transformed), index = False)
+
+    score_df = pd.DataFrame(data = {'Prediction': ['Train Predction', 'Test Prediction'], 'Accuracy Score': accuracy_scores})
+    score_df.to_csv('Scores_for_{}{}.csv'.format(clf_name, transformed), index = False)
+    get_matrix(y_test = y_test, y_test_pred = y_test_pred,
+                y_train = y_train, y_train_pred = y_train_pred,
+                estimator_name = clf_name, label_encoder = label_encoder, transformed = transformed)
+
+    print(current_time() + ': Finish getting confusion matrix for ' + clf_name)
+
+    save_model(clf, clf.__class__.__name__ + transformed)
+
+    return clf
+
+def train_clf_transformed(clf):
+    x_train_transformed = estimators_RFECV[clf.__class__.__name__].transform(x_train)
+    x_test_transformed = estimators_RFECV[clf.__class__.__name__].transform(x_test)
+    x_val_transformed = estimators_RFECV[clf.__class__.__name__].transform(x_val)
+    train_clf(clf, x_train_transformed, x_test_transformed, x_val_transformed, transformed = '_transformed')
+
+    return clf
+
+def get_feature_importance_by_tree(clf):
+    feature_importance = pd.DataFrame(data = {'feature': x_train.columns, 'feature_importance': clf.feature_importances_})
+    feature_importance.sort_values(['feature_importance'], ascending = False)
+    feature_importance.to_csv('Feature_Importance_{}.csv'.format(clf.__class__.__name__), index = False)
+
+    return feature_importance
+
+import pickle
+def save_model(model, filename):
+    pickle.dump(lr, open(filename + '.sav', 'wb'))
+
+def load_model(filename):
+    return pickle.load(open(filename + '.sav', 'rb'))
+
+
 # label encoding for destination column
 from sklearn.preprocessing import LabelEncoder
+y = users['country_destination']
 label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(y)
+save_label_encoder(label_encoder)
 
-dropped_columns = ['data', 'country_destination', 'id', 'age', 'date_account_created', 'date_first_active', 'date_first_booking']
-x_encoded = train_encoded.drop(columns = dropped_columns)
-# (set(x.columns)).difference(set(categorical_features))
+x_users = users[['gender', 'age_bkt', 'language', 'signup_method', 'signup_app',
+                # 'signup_flow', 'affiliate_channel', 'affiliate_provider', 'first_device_type', 'first_browser',
+                # 'date_account_created_year', 'date_first_active_year',
+                # 'date_account_created_month', 'date_first_active_month',
+                # 'date_account_created_day_count', 'date_first_active_day_count',
+                # 'date_account_created_month_count','date_first_active_month_count'
+                ]]
 
-# one hot encoding for categorical values
-x_train, x_test, y_train, y_test = train_test_split(x_encoded, y_encoded, test_size=0.3, stratify = y,random_state=SEED)
+print(users.columns)
 
-# cross validation
-# from sklearn import model_selection # RFE
-# cv_split = model_selection.ShuffleSplit(n_splits = 5, test_size = .3, train_size = .7, random_state = SEED)
+# one hot encoding for categorical columns
+from sklearn.model_selection import train_test_split
+x_users_encoded = pd.get_dummies(x_users, columns =
+                ['gender', 'age_bkt', 'language', 'signup_method', 'signup_app',
+                # 'signup_flow', 'affiliate_channel', 'affiliate_provider', 'first_device_type', 'first_browser',
+                # 'date_account_created_year', 'date_first_active_year',
+                # 'date_account_created_month', 'date_first_active_month',
+                # 'date_account_created_day_count', 'date_first_active_day_count',
+                # 'date_account_created_month_count','date_first_active_month_count'
+                ])
 
+# Split data into train, test and val
+x_train, x_val, y_train, y_val = train_test_split(x_users_encoded, y_encoded, test_size=0.3, stratify = y_encoded,random_state=SEED)
+x_train, x_test, y_train, y_test = train_test_split(x_train, y_train, test_size=0.3, stratify = y_train,random_state=SEED)
 
+print('Train Shape: ' + str(x_train.shape))
+print('Test Shape: ' + str(x_test.shape))
+print('Validation Shape: ' + str(x_val.shape))
+
+train_result_df = pd.DataFrame(data = {'y_train': y_train})
+test_result_df = pd.DataFrame(data = {'y_test': y_test})
+val_result_df = pd.DataFrame(data = {'y_test': y_val})
+run_times_df = pd.DataFrame()
 
 # Model Tuning ---------------------------------------------------------------
-from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
+from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-from xgboost.xgb import XGBClassifier
-
+from xgboost.sklearn import XGBClassifier
+from sklearn.feature_selection import RFECV, RFE
 
 # RFECV: https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.RFECV.html
-from sklearn.feature_selection import RFECV
-
-SCORING_METHOD =
 
 start_total = time.perf_counter()
 
-estimators = {
-    'lr': LogisticRegressionCV(random_state = SEED),
-    'dtree': DecisionTreeClassifier(random_state = SEED),
-    # 'rfc': RandomForestClassifier(random_state = SEED),
-    # 'xgb': XGBClassifier(seed = SEED)
-    }
+estimators = {clf.__class__.__name__: clf for clf in [LogisticRegression(random_state = SEED),
+                                                    DecisionTreeClassifier(random_state = SEED),
+                                                    RandomForestClassifier(random_state = SEED),
+                                                    XGBClassifier(seed = SEED)
+                                                    ]}
 estimators_RFECV = {}
 for estimatorName, estimator in estimators.items():
     print(current_time() + ': Start training ' + estimatorName)
     start = time.perf_counter()
-    rfecv = RFECV(estimator = estimator, step = 1, scoring = 'accuracy', cv = 5)
+    rfecv = RFECV(estimator = estimator, step = 1, scoring = 'accuracy', cv = 3)
     rfecv_result = rfecv.fit(x_train, y_train)
     run = time.perf_counter() - start
 
     print('{} runs for {:.2f} seconds.'.format(estimator.__class__.__name__, run))
-    # # clf[1].set_params(**best_param)
     estimators_RFECV[estimatorName] = rfecv_result
+
+    rfe_result_rank = pd.DataFrame(data = {'Ranking': rfecv_result.ranking_, 'Column': x_train.columns}).sort_values('Ranking')
+    rfe_result_rank.to_csv('RFECV_Ranking_for_{}.csv'.format(estimator.__class__.__name__), index = False)
+
+    plot_estimator_no_feature_vs_accuracy_score(rfecv_result, estimator)
 
 run_total = time.perf_counter() - start_total
 print('Total running time was {:.2f} minutes.'.format(run_total/60))
 
-
-
-
-from sklearn.model_selection import GridSearchCV
-
 # LogisticRegression
 lr = LogisticRegression(random_state = SEED)
+lr = train_clf(lr, x_train, x_test, x_val)
 
+lr_t = LogisticRegression(random_state = SEED)
+lr_t = train_clf_transformed(lr_t)
 
-clf = dtc
-print(clf.__class__.__name__)
-clf.fit(x_train, y_train)
-y_pred = clf.predict(x_test)
-print('Trainset Scores')
-print(score(y_train, clf.predict(x_train)))
-print('Testset Scores')
-print(score(y_test, y_pred))
-
-df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_test), name='True'), pd.Series(label_encoder.inverse_transform(y_pred), name='Predict'))
-plot_confusion_matrix(confusion_matrix(y_test, y_pred), label_encoder.classes_)
-
-
-
-
-dtc = DecisionTreeClassifier(random_state = SEED)
-
-
-
-
-
-forest_class = RandomForestClassifier(random_state = SEED)
-
-n_estimators = [100, 500]
-min_samples_split = [10, 20]
-
-param_grid_forest = {'n_estimators' : n_estimators, 'min_samples_split' : min_samples_split}
-
-
-rand_search_forest = GridSearchCV(forest_class, param_grid_forest, cv = 4, refit = True,
+# DecisionTreeClassifier
+from sklearn.model_selection import GridSearchCV
+tree = DecisionTreeClassifier(random_state = SEED)
+min_samples_split = [10, 30, 50, 100, 200, 300]
+param_grid_tree = {'min_samples_split' : min_samples_split}
+grid_search_tree = GridSearchCV(tree, param_grid_tree, cv = 5, refit = True,
                                  n_jobs = -1, verbose=2)
+grid_search_tree.fit(x_train, y_train)
+for score in grid_search_tree.grid_scores_:
+    print(score)
+print(grid_search_tree.best_params_)
+tree = grid_search_tree.best_estimator_
+print(tree.get_params)
+get_feature_importance_by_tree(tree)
 
-rand_search_forest.fit(x_train2, encoded_y_train)
+tree = DecisionTreeClassifier(random_state = SEED, **grid_search_tree.best_params_)
+tree = train_clf(tree, x_train, x_test, x_val)
 
-random_estimator = rand_search_forest.best_estimator_
-
-#
-# # Feature importance by RandomForest
-# # feature_importance = pd.DataFrame(data = {'feature': x_encoded.columns, 'feature_importance': rfc.feature_importances_})
-# # feature_importance.sort_values(['feature_importance'])
-
-
-y_pred_random_estimator = random_estimator.predict_proba(final_train_X)
-y_pred = random_estimator.predict_proba(final_test_X)
-
-
+tree_t = DecisionTreeClassifier(random_state = SEED, **grid_search_tree.best_params_)
+tree_t = train_clf_transformed(tree_t)
 
 
-# for clf in [lr, dtc, rfc, mlpc]:
-#     print(clf.__class__.__name__)
-#     clf.fit(x_train, y_train)
-#     y_pred = clf.predict(x_test)
-#     print('Trainset Scores')
-#     print(score(y_train, clf.predict(x_train)))
-#     print('Testset Scores')
-#     print(score(y_test, y_pred))
+# RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+rfc = RandomForestClassifier(random_state = SEED)
 
-from xgboost.sklearn import XGBClassifier
+n_estimators = [100, 300]
+min_samples_split = [30, 50, 100, 200]
+param_grid_rfc = {'min_samples_split' : min_samples_split, 'n_estimators': n_estimators}
+grid_search_rfc = GridSearchCV(rfc, param_grid_rfc, cv = 5, refit = True,
+                                 n_jobs = -1, verbose=2)
+grid_search_rfc.fit(x_train, y_train)
+for score in grid_search_rfc.grid_scores_:
+    print(score)
+print(grid_search_rfc.best_params_)
+rfc = grid_search_rfc.best_estimator_
+print(rfc.get_params)
+get_feature_importance_by_tree(rfc)
+
+rfc = RandomForestClassifier(random_state = SEED, **grid_search_rfc.best_params_)
+rfc = train_clf(rfc, x_train, x_test, x_val)
+
+rfc_t = RandomForestClassifier(random_state = SEED, **grid_search_rfc.best_params_)
+rfc_t = train_clf_transformed(rfc_t)
+
+# XGBClassifier
 xgb = XGBClassifier(max_depth= 6, learning_rate=0.3, n_estimators=25,
                     objective='multi:softprob', subsample=0.5, colsample_bytree=0.5, seed=SEED)
+xgb_t = XGBClassifier(max_depth= 6, learning_rate=0.3, n_estimators=25,
+                    objective='multi:softprob', subsample=0.5, colsample_bytree=0.5, seed=SEED)
 
-print(current_time() + ': Start training XGBClassifier')
-xgb.fit(x_encoded, y_encoded)
-print(current_time() + ': Finish training XGBClassifier')
+xgb = train_clf(xgb, x_train, x_test, x_val)
+xgb_t = train_clf_transformed(xgb_t)
 
-id_test = test_encoded['id']
-x_test = test_encoded.drop(columns = dropped_columns)
+train_result_df.to_csv('Predicts_Train.csv', index = False)
+test_result_df.to_csv('Predicts_Test.csv', index = False)
+val_result_df.to_csv('Predicts_Val.csv', index = False)
+run_times_df.to_csv('Run_Time.csv', index = False)
 
-# preds
-y_pred = xgb.predict(x_test)
-y_pred = label_encoder.inverse_transform(y_pred)
-# y_pred[0]
-# np.percentile([item for sublist in y_pred for item in sublist], 50)
-
-#Generate submission
-sub = pd.DataFrame(np.column_stack((id_test, y_pred)), columns=['id', 'country'])
-sub.to_csv('submission/xgb.csv',index=False)
-print(current_time() + ': Saved xgb.csv')
-
-
-# probs
-y_prob = xgb.predict_proba(x_test)
-
-ids = np.repeat(id_test, 5)
-destinations = label_encoder.inverse_transform([item for prob in y_prob for item in (np.argsort(y_prob[0])[::-1])[:5]])
-
-# # Taking the 5 classes with highest probabilities
-# ids = []  #list of ids
-# destinations = []  #list of countries
-# for i in range(len(id_test)):
-#     idx = id_test[i]
-#     ids += [idx] * 5
-#     destinations += label_encoder.inverse_transform(np.argsort(y_prob[i])[::-1])[:5].tolist()
-
-sub = pd.DataFrame(np.column_stack((ids, destinations)), columns=['id', 'country'])
-sub.to_csv('submission/xgb_5.csv',index=False)
-print(current_time() + ': Saved xgb.csv')
 
 # Model oof Stacking -----------------------------------------------------------
+test_prob_files = [file for file in os.listdir(WORKING_DIR) if file.startswith('Prob_Test_') and 'transformed' not in file]
+prob_dfs = []
+for prob_file in test_prob_files:
+    df = pd.read_csv(prob_file)
+    model_name = prob_file.replace('Prob_Test_', '').replace('.csv', '')
+    df.columns = [model_name + '_' + str(i) for i in range(12)]
+    prob_dfs.append(df)
+
+x_test_meta = pd.concat(prob_dfs, axis = 1)
+y_test_meta = y_test
+
+xgb_stacking = XGBClassifier(max_depth= 6, learning_rate=0.3, n_estimators=25,
+                            objective='multi:softprob', subsample=0.5, colsample_bytree=0.5, seed=SEED)
+xgb_stacking.fit(x_test_meta, y_test_meta)
+
+y_test_pred_meta = xgb_stacking.predict(x_test_meta)
+print(accuracy_score(y_test_meta, y_test_pred_meta))
+save_model(xgb_stacking, 'XGBClassifier_Stacking')
 
 
+val_prob_files = [file for file in os.listdir(WORKING_DIR) if file.startswith('Prob_Val_') and 'transformed' not in file]
+prob_dfs = []
+for prob_file in val_prob_files:
+    df = pd.read_csv(prob_file)
+    model_name = prob_file.replace('Prob_Val_', '').replace('.csv', '')
+    df.columns = [model_name + '_' + str(i) for i in range(12)]
+    prob_dfs.append(df)
 
-# Ignore ------------------------------------------------------------------------
+x_val_meta = pd.concat(prob_dfs, axis = 1)
+x_val_meta = x_val_meta[x_test_meta.columns]
+y_val_pred = xgb_stacking.predict(x_val_meta)
+print(accuracy_score(y_val, y_val_pred))
+
+get_matrix(y_test = y_val, y_test_pred = y_val_pred,
+            y_train = y_test_meta, y_train_pred = y_test_pred_meta,
+            estimator_name = 'XGBClassifier_Stacking', label_encoder = label_encoder)
