@@ -1,0 +1,17 @@
+digraph Tree {
+node [shape=box, style="filled, rounded", color="black", fontname=helvetica] ;
+edge [fontname=helvetica] ;
+0 [label="age_fix <= -0.08\ngini = 0.55\nsamples = 59052\nvalue = [121, 352, 200, 566, 1148, 585, 783, 36033, 198, 66\n16076, 2924]\nclass = y[7]", fillcolor="#3947e576"] ;
+1 [label="device_Desktop <= 0.5\ngini = 0.34\nsamples = 26403\nvalue = [25, 92, 38, 149, 316, 157, 254, 21245, 44, 29\n3234, 820]\nclass = y[7]", fillcolor="#3947e5c6"] ;
+0 -> 1 [labeldistance=2.5, labelangle=45, headlabel="True"] ;
+2 [label="gini = 0.19\nsamples = 8515\nvalue = [3, 9, 4, 24, 42, 27, 32, 7650, 9, 3, 573, 139]\nclass = y[7]", fillcolor="#3947e5e3"] ;
+1 -> 2 ;
+3 [label="gini = 0.4\nsamples = 17888\nvalue = [22, 83, 34, 125, 274, 130, 222, 13595, 35, 26\n2661, 681]\nclass = y[7]", fillcolor="#3947e5b7"] ;
+1 -> 3 ;
+4 [label="signup_method_facebook <= 0.5\ngini = 0.63\nsamples = 32649\nvalue = [96, 260, 162, 417, 832, 428, 529, 14788, 154, 37\n12842, 2104]\nclass = y[7]", fillcolor="#3947e519"] ;
+0 -> 4 [labeldistance=2.5, labelangle=-45, headlabel="False"] ;
+5 [label="gini = 0.65\nsamples = 18797\nvalue = [68, 202, 109, 287, 597, 306, 395, 6278, 113, 21\n8958, 1463]\nclass = y[10]", fillcolor="#e5399d37"] ;
+4 -> 5 ;
+6 [label="gini = 0.54\nsamples = 13852\nvalue = [28, 58, 53, 130, 235, 122, 134, 8510, 41, 16, 3884\n641]\nclass = y[7]", fillcolor="#3947e576"] ;
+4 -> 6 ;
+}

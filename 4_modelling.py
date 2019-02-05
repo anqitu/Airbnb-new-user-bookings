@@ -256,45 +256,86 @@ def gridsearch_rfecv_estimator(estimator, param_grid):
 
     return gridsearcher
 
-# """#### LogisticRegression"""
-# param_grid_lr = [
-#     {'estimator__C': [0.01, 0.1, 1, 5, 10],
-#      'estimator__penalty': ['l2', 'l1'],
-#      'estimator__solver' : ['liblinear'],
-#      'estimator__multi_class' : ['ovr'],
-#      'estimator__class_weight': [None, 'balanced'],
-#      'estimator__max_iter': [1000]}]
+"""#### LogisticRegression"""
+param_grid_lr = [
+    {'estimator__C': [0.01, 0.1, 1, 5, 10],
+     'estimator__penalty': ['l2', 'l1'],
+     'estimator__solver' : ['liblinear'],
+     'estimator__multi_class' : ['ovr'],
+     'estimator__class_weight': [None, 'balanced'],
+     'estimator__max_iter': [1000]}]
+
+param_grid_lr = [
+    {'estimator__C': [1],
+     'estimator__penalty': ['l2'],
+     'estimator__solver' : ['liblinear'],
+     'estimator__multi_class' : ['ovr'],
+     'estimator__class_weight': [None],
+     'estimator__max_iter': [1000]}]
+
+lr = LogisticRegression(random_state = SEED)
+gridsearcher_lr = gridsearch_rfecv_estimator(estimator = lr, param_grid = param_grid_lr)
+load_obj('GridSearch_Best_Params_LogisticRegression')
+
+lr = LogisticRegression(**estimators_params['LogisticRegression'])
+lr = train_clf(lr, x_train, x_test)
+
+# Coefficient Abosolute Average
+# lr = LogisticRegression(**load_obj('Params_LogisticRegression'))
+# lr.fit(x_train, y_train)
 #
-# param_grid_lr = [
-#     {'estimator__C': [1],
-#      'estimator__penalty': ['l2'],
-#      'estimator__solver' : ['liblinear'],
-#      'estimator__multi_class' : ['ovr'],
-#      'estimator__class_weight': [None],
-#      'estimator__max_iter': [1000]}]
+# # lr_coefs_df = pd.DataFrame(data = lr.coef_)
+# # lr_coefs_df.index = label_encoder.inverse_transform(lr_coefs_df.index)
+# # lr_coefs_df = lr_coefs_df.transpose()
+# # lr_coefs_df['Column'] = x_train.columns
 #
-# lr = LogisticRegression(random_state = SEED)
-# gridsearcher_lr = gridsearch_rfecv_estimator(estimator = lr, param_grid = param_grid_lr)
-# load_obj('GridSearch_Best_Params_LogisticRegression')
+# lr_abs_coefs_df = pd.DataFrame(data = {'Column': x_train.columns, 'Coefficient Abosolute Average': np.absolute(lr.coef_).mean(axis = 0)})
+# lr_abs_coefs_df = lr_abs_coefs_df.sort_values(['Coefficient Abosolute Average'], ascending=False)
 #
-# lr = LogisticRegression(**estimators_params['LogisticRegression'])
-# lr = train_clf(lr, x_train, x_test)
-#
-# """#### DecisionTreeClassifier"""
-# tree = DecisionTreeClassifier(random_state = SEED)
-# param_grid_tree = {'estimator__min_samples_split' : [10, 30, 50, 100, 150, 200, 300, 400, 500],
-#                    'estimator__max_depth': [4,8,12],
-#                    'estimator__class_weight': ['balanced', None]}
-# param_grid_tree = {'estimator__min_samples_split' : [400],
-#                    'estimator__max_depth': [2],
-#                    'estimator__class_weight': [None]}
-# gridsearcher_tree = gridsearch_rfecv_estimator(estimator = tree, param_grid = param_grid_tree)
-# load_obj('GridSearch_Best_Params_DecisionTreeClassifier')
-# gridsearcher_tree.best_estimator_.estimator_
-#
-# dtree = DecisionTreeClassifier(**estimators_params['DecisionTreeClassifier'])
-# dtree = train_clf(dtree, x_train, x_test)
-#
+# TOP = 12
+# fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+# plt.bar(lr_abs_coefs_df.iloc[:TOP, :]['Column'], lr_abs_coefs_df.iloc[:TOP, :]['Coefficient Abosolute Average'])
+# plt.ylabel('Coefficient Abosolute Average')
+# plt.xlabel('Column')
+# plt.xticks(rotation=45)
+# title = 'Coefficient Abosolute Average of Columns (Top {})'.format(TOP)
+# plt.title(title, loc = 'center', y=1.1, fontsize = 20)
+# saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
+# plt.savefig(saved_path, dpi=200, bbox_inches="tight")
+
+
+"""#### DecisionTreeClassifier"""
+tree = DecisionTreeClassifier(random_state = SEED)
+param_grid_tree = {'estimator__min_samples_split' : [10, 30, 50, 100, 150, 200, 300, 400, 500],
+                   'estimator__max_depth': [4,8,12],
+                   'estimator__class_weight': ['balanced', None]}
+param_grid_tree = {'estimator__min_samples_split' : [400],
+                   'estimator__max_depth': [3],
+                   'estimator__class_weight': [None]}
+gridsearcher_tree = gridsearch_rfecv_estimator(estimator = tree, param_grid = param_grid_tree)
+load_obj('GridSearch_Best_Params_DecisionTreeClassifier')
+gridsearcher_tree.best_estimator_.estimator_
+
+dtree = DecisionTreeClassifier(**estimators_params['DecisionTreeClassifier'])
+dtree = train_clf(dtree, x_train, x_test)
+
+
+# params = load_obj('Params_DecisionTreeClassifier')
+# dtree = DecisionTreeClassifier(**params)
+# dtree.fit(x_train, y_train)
+# accuracy_score(dtree.predict(x_test), y_test)
+# import graphviz
+# from sklearn import tree
+# dot_data = tree.export_graphviz(dtree, out_file=None,
+#                                 feature_names = x_train.columns,
+#                                 class_names = True,
+#                                 filled = True, rounded = True, proportion = False, precision = 2)
+# graph = graphviz.Source(dot_data, format="png")
+# save_path = os.path.join(IMAGE_DIRECTORY, 'tree', '3')
+# graph.render(save_path)
+# print(label_encoder.classes_[7]) #NDF
+# print(label_encoder.classes_[10]) #US
+
 # # Plot tree
 # import graphviz
 # from sklearn import tree
@@ -305,21 +346,55 @@ def gridsearch_rfecv_estimator(estimator, param_grid):
 # graph = graphviz.Source(dot_data, format="png")
 # save_path = os.path.join(IMAGE_DIRECTORY, 'tree', '1')
 # graph.render(save_path)
+
+# # Feature Importance
+# dtree = DecisionTreeClassifier(**load_obj('Params_DecisionTreeClassifier'))
+# dtree.fit(x_train, y_train)
 #
+# dtree_feature_importance_df = pd.DataFrame(data = {'Column': x_train.columns, 'Feature Importance': dtree.feature_importances_})
+# dtree_feature_importance_df = dtree_feature_importance_df.sort_values(['Feature Importance'], ascending=False)
 #
-# """#### RandomForestClassifier"""
-# rfc = RandomForestClassifier(random_state = SEED)
-# param_grid_rfc = {'estimator__min_samples_split' : [10, 30, 50, 100, 200],
-#                   'estimator__n_estimators': [25, 100, 200]}
-# param_grid_rfc = {'estimator__min_samples_split' : [100],
-#                   'estimator__n_estimators': [50]}
-# gridsearcher_rfc = gridsearch_rfecv_estimator(estimator = rfc, param_grid = param_grid_rfc)
-# load_obj('GridSearch_Best_Params_RandomForestClassifier')
+# fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+# plt.bar(dtree_feature_importance_df.iloc[:TOP, :]['Column'], dtree_feature_importance_df.iloc[:TOP, :]['Feature Importance'])
+# plt.ylabel('Feature Importance')
+# plt.xlabel('Column')
+# plt.xticks(rotation=0)
+# title = 'Feature Importance (DecisionTree)'
+# plt.title(title, loc = 'center', y=1.1, fontsize = 20)
+# saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
+# plt.savefig(saved_path, dpi=200, bbox_inches="tight")
+
+
+"""#### RandomForestClassifier"""
+rfc = RandomForestClassifier(random_state = SEED)
+param_grid_rfc = {'estimator__min_samples_split' : [10, 30, 50, 100, 200],
+                  'estimator__n_estimators': [25, 100, 200]}
+param_grid_rfc = {'estimator__min_samples_split' : [100],
+                  'estimator__n_estimators': [50]}
+gridsearcher_rfc = gridsearch_rfecv_estimator(estimator = rfc, param_grid = param_grid_rfc)
+load_obj('GridSearch_Best_Params_RandomForestClassifier')
+
+rfc = RandomForestClassifier(**estimators_params['RandomForestClassifier'])
+rfc = train_clf(rfc, x_train, x_test)
+
+# # Feature Importance
+# rfc = RandomForestClassifier(**load_obj('Params_RandomForestClassifier'))
+# rfc.fit(x_train, y_train)
 #
-# rfc = RandomForestClassifier(**estimators_params['RandomForestClassifier'])
-# rfc = train_clf(rfc, x_train, x_test)
+# rfc_feature_importance_df = pd.DataFrame(data = {'Column': x_train.columns, 'Feature Importance': rfc.feature_importances_})
+# rfc_feature_importance_df = rfc_feature_importance_df.sort_values(['Feature Importance'], ascending=False)
 #
-#
+# TOP = 12
+# fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+# plt.bar(rfc_feature_importance_df.iloc[:TOP, :]['Column'], rfc_feature_importance_df.iloc[:TOP, :]['Feature Importance'])
+# plt.ylabel('Feature Importance')
+# plt.xlabel('Column')
+# plt.xticks(rotation=45)
+# title = 'Feature Importance (RandomForest) (Top {})'.format(TOP)
+# plt.title(title, loc = 'center', y=1.1, fontsize = 20)
+# saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
+# plt.savefig(saved_path, dpi=200, bbox_inches="tight")
+
 # """#### XGBClassifier"""
 # xgb = XGBClassifier(seed=SEED)
 # param_grid_xgb = {'estimator__earning_rate': [.1, .3, .5], #default: .3
@@ -341,6 +416,26 @@ def gridsearch_rfecv_estimator(estimator, param_grid):
 # xgb = train_clf(xgb, x_train, x_test)
 
 
+xgb = XGBClassifier(**load_obj('Params_XGBClassifier'))
+xgb.fit(x_train, y_train)
+accuracy_score(xgb.predict(x_test), y_test)
+
+# Feature Importance
+xgb_feature_importance_df = pd.DataFrame(data = {'Column': x_train.columns, 'Feature Importance': xgb.feature_importances_})
+xgb_feature_importance_df = xgb_feature_importance_df.sort_values(['Feature Importance'], ascending=False)
+
+TOP = 12
+fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+plt.bar(xgb_feature_importance_df.iloc[:TOP, :]['Column'], xgb_feature_importance_df.iloc[:TOP, :]['Feature Importance'])
+plt.ylabel('Feature Importance')
+plt.xlabel('Column')
+plt.xticks(rotation=60)
+title = 'Feature Importance (XGBClassifier) (Top {})'.format(TOP)
+plt.title(title, loc = 'center', y=1.1, fontsize = 20)
+saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
+plt.savefig(saved_path, dpi=200, bbox_inches="tight")
+
+
 """#### Neural Network"""
 
 # Neural Network
@@ -355,10 +450,6 @@ numpy.random.seed(SEED)
 x_train_values = x_train.values
 x_test_values = x_test.values
 y_train_cat = np_utils.to_categorical(y_train)
-
-from sklearn.utils import class_weight
-class_weight = class_weight.compute_class_weight('balanced',np.unique(y_train)
-                                               ,y_train)
 
 def get_model():
   # create model
@@ -383,64 +474,81 @@ history = model.fit(x_train_values, y_train_cat, epochs=100, batch_size=32,
                     callbacks=[EarlyStopping(monitor='val_loss', patience=5, verbose=0),
                     ModelCheckpoint(os.path.join(MODEL_PATH, 'NeuralNetwork.hdf5'),
                     monitor='val_loss', verbose=1, save_best_only=True, mode='max')],
-                    verbose=2, validation_split=0.3, shuffle=True, class_weight = class_weight)
+                    verbose=2, validation_split=0.3, shuffle=True)
 
 run_total = time.perf_counter() - start_total
 print(current_time() + ': Finish training ' + 'NeuralNetwork')
 run_times_df['NeuralNetwork'] = [run_total]
 
+# Weight
+# from keras.wrappers.scikit_learn import KerasClassifier, KerasRegressor
+# import eli5
+# from eli5.sklearn import PermutationImportance
+# sk_params = {'epochs':100,
+#             'batch_size':32,
+#             'callbacks':[EarlyStopping(monitor='val_loss', patience=3, verbose=0),
+#                         ModelCheckpoint(os.path.join(MODEL_PATH, 'NeuralNetwork.hdf5'),monitor='val_loss', verbose=1, save_best_only=True, mode='max')],
+#             'verbose':2,
+#             'validation_split':0.3,
+#             'shuffle':True}
+# my_model = KerasClassifier(build_fn=get_model, **sk_params)
+# my_model.fit(x_train_values, y_train_cat)
+# perm = PermutationImportance(my_model, random_state=SEED).fit(x_train_values, y_train_cat)
+# eli5.show_weights(perm, feature_names = x_train.columns.tolist(), include_styles = True)
 
-# list all data in history
-print(history.history.keys())
 
-# summarize history for accuracy
-plt.figure(figsize=(8,6))
-plt.plot(history.history['acc'])
-plt.plot(history.history['val_acc'])
-plt.legend(['train', 'test'], loc='bottom right', prop={'size': 18})
-plt.title('model accuracy')
-plt.ylabel('accuracy')
-plt.xlabel('epoch')
-plt.ylim(0.5, 0.7)
-plt.savefig('NeuralNetwork_Accuracy_History')
 
-# summarize history for loss
-plt.figure(figsize=(8,6))
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('model loss')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.ylim(1.5, 0.8)
-plt.legend(['train', 'test'], loc='bottom right', prop={'size': 18})
-plt.savefig('NeuralNetwork_Loss_History')
-
-# model.save(os.path.join(MODEL_PATH, 'nn_2.h5')) # save model
-
-clf_name = 'NeuralNetwork'
-
-y_train_prob = model.predict(x_train)
-y_test_prob = model.predict(x_test)
-check_dir(TRAIN_RESULT_PATH)
-(pd.DataFrame(y_train_prob)).to_csv(os.path.join(TRAIN_RESULT_PATH,"Prob_Train_{}.csv").format(clf_name), index = False)
-(pd.DataFrame(y_test_prob)).to_csv(os.path.join(TRAIN_RESULT_PATH,"Prob_Test_{}.csv").format(clf_name), index = False)
-
-y_train_pred = y_train_prob.argmax(axis=-1)
-train_result_df['y_train_pred_' + clf_name] = y_train_pred
-y_test_pred = y_test_prob.argmax(axis=-1)
-test_result_df['y_test_pred_' + clf_name] = y_test_pred
-
-accuracy_scores = []
-accuracy_scores.append(accuracy_score(y_train_pred, y_train))
-accuracy_scores.append(accuracy_score(y_test_pred, y_test))
-
-score_df = pd.DataFrame(data = {'Prediction': ['Train Prediction', 'Test Prediction'], 'Accuracy Score': accuracy_scores})
-check_dir(TRAIN_RESULT_PATH)
-score_df.to_csv(os.path.join(TRAIN_RESULT_PATH,'Scores_for_{}.csv').format(clf_name), index = False)
-get_matrix(y_test = y_test, y_test_pred = y_test_pred,
-            y_train = y_train, y_train_pred = y_train_pred,
-            estimator_name = clf_name, label_encoder = label_encoder)
-print(current_time() + ': Finish getting confusion matrix for ' + clf_name)
+# # list all data in history
+# print(history.history.keys())
+#
+# # summarize history for accuracy
+# plt.figure(figsize=(8,6))
+# plt.plot(history.history['acc'])
+# plt.plot(history.history['val_acc'])
+# plt.legend(['train', 'test'], loc='bottom right', prop={'size': 18})
+# plt.title('model accuracy')
+# plt.ylabel('accuracy')
+# plt.xlabel('epoch')
+# plt.ylim(0.5, 0.7)
+# plt.savefig('NeuralNetwork_Accuracy_History')
+#
+# # summarize history for loss
+# plt.figure(figsize=(8,6))
+# plt.plot(history.history['loss'])
+# plt.plot(history.history['val_loss'])
+# plt.title('model loss')
+# plt.ylabel('loss')
+# plt.xlabel('epoch')
+# plt.ylim(1.5, 0.8)
+# plt.legend(['train', 'test'], loc='bottom right', prop={'size': 18})
+# plt.savefig('NeuralNetwork_Loss_History')
+#
+# # model.save(os.path.join(MODEL_PATH, 'nn_2.h5')) # save model
+#
+# clf_name = 'NeuralNetwork'
+#
+# y_train_prob = model.predict(x_train)
+# y_test_prob = model.predict(x_test)
+# check_dir(TRAIN_RESULT_PATH)
+# (pd.DataFrame(y_train_prob)).to_csv(os.path.join(TRAIN_RESULT_PATH,"Prob_Train_{}.csv").format(clf_name), index = False)
+# (pd.DataFrame(y_test_prob)).to_csv(os.path.join(TRAIN_RESULT_PATH,"Prob_Test_{}.csv").format(clf_name), index = False)
+#
+# y_train_pred = y_train_prob.argmax(axis=-1)
+# train_result_df['y_train_pred_' + clf_name] = y_train_pred
+# y_test_pred = y_test_prob.argmax(axis=-1)
+# test_result_df['y_test_pred_' + clf_name] = y_test_pred
+#
+# accuracy_scores = []
+# accuracy_scores.append(accuracy_score(y_train_pred, y_train))
+# accuracy_scores.append(accuracy_score(y_test_pred, y_test))
+#
+# score_df = pd.DataFrame(data = {'Prediction': ['Train Prediction', 'Test Prediction'], 'Accuracy Score': accuracy_scores})
+# check_dir(TRAIN_RESULT_PATH)
+# score_df.to_csv(os.path.join(TRAIN_RESULT_PATH,'Scores_for_{}.csv').format(clf_name), index = False)
+# get_matrix(y_test = y_test, y_test_pred = y_test_pred,
+#             y_train = y_train, y_train_pred = y_train_pred,
+#             estimator_name = clf_name, label_encoder = label_encoder)
+# print(current_time() + ': Finish getting confusion matrix for ' + clf_name)
 
 # train_result_df.to_csv(os.path.join(TRAIN_RESULT_PATH, 'Predicts_Train.csv'), index = False)
 # test_result_df.to_csv(os.path.join(TRAIN_RESULT_PATH, 'Predicts_Test.csv'), index = False)
