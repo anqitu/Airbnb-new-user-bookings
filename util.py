@@ -23,9 +23,6 @@ SESSIONS_PATH = os.path.join(WORKING_DIR, 'data/sessions_all.csv')
 
 TRAIN_PATH = os.path.join(WORKING_DIR, 'data/train.csv')
 TEST_PATH = os.path.join(WORKING_DIR, 'data/test.csv')
-TRAINA_PATH = os.path.join(WORKING_DIR, 'data/trainA.csv')
-TRAINB_PATH = os.path.join(WORKING_DIR, 'data/trainB.csv')
-TRAINC_PATH = os.path.join(WORKING_DIR, 'data/trainC.csv')
 
 IMAGE_DIRECTORY = os.path.join(WORKING_DIR, 'images')
 IMAGE_PIE_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'pie')
@@ -39,6 +36,9 @@ IMAGE_MATRIX_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'matrix')
 
 TRAIN_RESULT_PATH = os.path.join(WORKING_DIR, 'training_result')
 MODEL_PATH = os.path.join(WORKING_DIR, 'models')
+
+SAMPLED_TRAIN_RESULT_PATH = os.path.join(WORKING_DIR, 'training_result_sampled')
+SAMPLED_MODEL_PATH = os.path.join(WORKING_DIR, 'models_sampled')
 
 
 """General"""
@@ -66,11 +66,9 @@ def display_category_counts(data, categorical_features):
     print(categorical_feature)
     print(data[categorical_feature].value_counts(dropna=False))
 
-def get_percentage(data, column, print = True):
+def get_percentage(data, column):
     count_df = data[column].value_counts().reset_index().rename(columns = {column: 'Count', 'index': column})
     count_df['%'] = count_df['Count'] / data.shape[0]
-    if print:
-        print(count_df)
     return count_df
 
 """Manipulate Data"""
@@ -83,14 +81,15 @@ def convert_minority_to_others(data, column_name, minority_counts = 0):
 def save_label_encoder(label_encoder, model_name):
     np.save(os.path.join(MODEL_PATH, model_name + '.npy'), label_encoder.classes_)
 
-def load_label_encoder(path):
+from sklearn.preprocessing import LabelEncoder
+def load_label_encoder(model_name):
     label_encoder = LabelEncoder()
-    label_encoder.classes_ = np.load(path)
+    label_encoder.classes_ = np.load(os.path.join(MODEL_PATH, model_name + '.npy'))
     return label_encoder
 
 import pickle
 def save_model(model, model_name):
-    pickle.dump(lr, open(os.path.join(MODEL_PATH, model_name + '.sav'), 'wb'))
+    pickle.dump(model, open(os.path.join(MODEL_PATH, model_name + '.sav'), 'wb'))
 
 def load_model(model_name):
     return pickle.load(open(os.path.join(MODEL_PATH, model_name + '.sav'), 'rb'))
