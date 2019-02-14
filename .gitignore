@@ -8,3 +8,17 @@ samples/
 data/
 
 Run1/
+
+__pycache__/
+
+*.png
+
+images/
+
+models/
+
+run1_after2014/
+
+training_result/
+
+*.pyc

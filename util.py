@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pickle
 
 # Set figure aesthetics
 plt.style.use('fivethirtyeight')
@@ -18,11 +19,21 @@ WORKING_DIR = '/Users/anqitu/Workspaces/NTU/Airbnb-new-user-bookings'
 # WORKING_DIR = '/content'
 
 SEED = 2019
-USERS_PATH = os.path.join(WORKING_DIR, 'data/users_sessions_all.csv')
-SESSIONS_PATH = os.path.join(WORKING_DIR, 'data/sessions_all.csv')
+USERS_PATH = os.path.join(WORKING_DIR, 'data/users.csv')
+USERS_WITH_NDF_PATH = os.path.join(WORKING_DIR, 'data/users_with_NDF.csv')
+USERS_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/users_min_to_others.csv')
+USERS_WITH_NDF_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/users_with_NDF_min_to_others.csv')
 
-TRAIN_PATH = os.path.join(WORKING_DIR, 'data/train.csv')
 TEST_PATH = os.path.join(WORKING_DIR, 'data/test.csv')
+TRAIN_RAW_PATH = os.path.join(WORKING_DIR, 'data/train_raw.csv')
+VAL_RAW_PATH = os.path.join(WORKING_DIR, 'data/val_raw.csv')
+TRAIN_SMOTE_PATH = os.path.join(WORKING_DIR, 'data/train_smote.csv')
+VAL_SMOTE_PATH = os.path.join(WORKING_DIR, 'data/val_smote.csv')
+
+TRAIN_RAW_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/train_raw_min_to_others.csv')
+VAL_RAW_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/val_raw_min_to_others.csv')
+TRAIN_SMOTE_MIN_TO_OTHERS_PATH =  os.path.join(WORKING_DIR, 'data/train_smote_min_to_others.csv')
+VAL_SMOTE_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/val_smote_min_to_others.csv')
 
 IMAGE_DIRECTORY = os.path.join(WORKING_DIR, 'images')
 IMAGE_PIE_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'pie')
@@ -33,12 +44,15 @@ IMAGE_BARS_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'bars')
 IMAGE_BUBBLE_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'bubble')
 IMAGE_GENERAL_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'general')
 IMAGE_MATRIX_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'matrix')
+IMAGE_TIME_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'time')
 
 TRAIN_RESULT_PATH = os.path.join(WORKING_DIR, 'training_result')
 MODEL_PATH = os.path.join(WORKING_DIR, 'models')
+IMAGE_MODEL_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'model')
 
 SAMPLED_TRAIN_RESULT_PATH = os.path.join(WORKING_DIR, 'training_result_sampled')
 SAMPLED_MODEL_PATH = os.path.join(WORKING_DIR, 'models_sampled')
+SAMPLED_IMAGE_MODEL_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'model_sampled')
 
 
 """General"""
@@ -51,6 +65,14 @@ def check_dir(directory):
 import datetime
 def current_time():
     return str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+def save_obj(obj, name):
+    with open(os.path.join(TRAIN_RESULT_PATH, name + '.pkl'), 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+def load_obj(name):
+    with open(os.path.join(TRAIN_RESULT_PATH, name + '.pkl'), 'rb') as f:
+        return pickle.load(f)
 
 """Check Data"""
 def display_null_percentage(data):
@@ -99,6 +121,9 @@ def convert_title_to_filename(title):
     for unacceptable in [' ', ':', '.', '(', ')']:
         title = title.replace(unacceptable, '_')
     return title
+
+def convert_column_name_to_title(column_name):
+    return column_name.replace('_', ' ').title()
 
 def plot_pie(data, column_name, title = None, save = False, show = True):
     temp = data[column_name].value_counts()
@@ -220,7 +245,7 @@ def plot_category_stacked_bar(data, x_column, y_column, percentage = False, titl
         if percentage:
             title = 'Percentage ' + title
 
-    plt.title(title, loc = 'center', y=1.15, fontsize = 25)
+    plt.title(title, loc = 'center', y=1.15, fontsize = 15)
     plt.tight_layout()
 
     plt.legend(loc=(1.04,0))
@@ -307,3 +332,83 @@ def plot_pairs(data,column_names, title = None, save = False, show = True):
         plt.show()
 
     plt.close()
+
+def plot_month_week_heatmap(data, title = None, save = False, show = True):
+    fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+    sns.heatmap(data, cmap="YlGnBu")
+
+    if title is None:
+        title = 'Total No. of Customers Heatmap'
+
+    plt.title(title, loc = 'center', y=1.1, fontsize = 25)
+    plt.xlabel('Month')
+    plt.ylabel('Day of the Week')
+    plt.tight_layout()
+
+    if save:
+        check_dir(IMAGE_TIME_DIRECTORY)
+        saved_path = os.path.join(IMAGE_TIME_DIRECTORY, convert_title_to_filename(title))
+        fig.savefig(saved_path, dpi=200, bbox_inches="tight")
+        print('Saved to {}'.format(saved_path))
+    if show:
+        plt.show()
+
+    plt.close()
+
+def get_prob_top_n(prob, n):
+    prob_sorted = prob.argsort()[:, ::-1]
+    return prob_sorted[:, n]
+
+from sklearn.metrics import accuracy_score, confusion_matrix, log_loss
+import itertools
+def plot_confusion_matrix(cm, classes, normalize=False, title=None, cmap=plt.cm.Blues, save = False, show = True):
+    fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+
+    plt.imshow(cm, interpolation='nearest', cmap=cmap, )
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
+    if title is None:
+        title = 'Confusion Matrix'
+        if normalize:
+            title = title + ' (Normalized)'
+    plt.title(title, loc = 'center', y=1.15, fontsize = 25)
+
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
+    if save:
+        check_dir(IMAGE_MATRIX_DIRECTORY)
+        saved_path = os.path.join(IMAGE_MATRIX_DIRECTORY, convert_title_to_filename(title))
+        plt.savefig(saved_path, dpi=200, bbox_inches="tight")
+        plt.show()
+        print('Saved to {}'.format(saved_path))
+    if show:
+        plt.show()
+
+    plt.close()
+
+
+def get_matrix(y_test, y_test_pred, y_train, y_train_pred, estimator_name, label_encoder):
+    check_dir(TRAIN_RESULT_PATH)
+
+    title = 'Confusion Matrix for ' + estimator_name + ' Test'
+    df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_test), name='True'), pd.Series(label_encoder.inverse_transform(y_test_pred), name='Predict'))
+    df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_title_to_filename(title) + '.csv'))
+    plot_confusion_matrix(confusion_matrix(y_test, y_test_pred), label_encoder.classes_, title = title, save = True)
+
+    title = 'Confusion Matrix for ' + estimator_name  + ' Train'
+
+    df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_train), name='True'), pd.Series(label_encoder.inverse_transform(y_train_pred), name='Predict'))
+    df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_title_to_filename(title) + '.csv'))
+    plot_confusion_matrix(confusion_matrix(y_train, y_train_pred), label_encoder.classes_, title = title, save = True)

@@ -148,3 +148,233 @@
 #
 # # 0.6529168990518683
 # # 0.6287713161346743
+
+
+# def plot_estimator_no_feature_vs_accuracy_score(rfecv_result, estimatorName, title = None, save = False, show = True):
+#     plt.figure()
+#     plt.xlabel("Number of features selected")
+#     plt.ylabel("Cross validation score (Accuracy)")
+#     plt.plot(range(1, len(rfecv_result.grid_scores_) + 1), rfecv_result.grid_scores_, figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+#     plt.ylim([0.4,0.7])
+#
+#     if title is None:
+#         title = 'Number of Features vs Accuracy Score for ' + estimatorName
+#     plt.title(title, loc = 'center', y=1.1, fontsize = 25)
+#
+#     if save:
+#         check_dir(IMAGE_GENERAL_DIRECTORY)
+#         saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
+#         plt.savefig(saved_path, dpi=200, bbox_inches="tight")
+#         print('Saved to {}'.format(saved_path))
+#     if show:
+#         plt.show()
+#
+#     plt.close()
+
+
+
+
+# y, X = dmatrices( 'country_destination ~ ' + ' + '.join(cols), data=x_train, return_type='dataframe')
+# X = sm.add_constant(X, prepend = False)
+# mdl = MNLogit(X, y)
+# mdl_fit = mdl.fit(method='bfgs')
+
+
+# """#### Light GBM"""
+# import lightgbm as lgbm
+#
+# lgb_params =  {
+#     'task': 'train',
+#     'nthread': -1,
+#     'boosting_type': 'gbdt',
+#     'objective': 'multiclass',
+#     'num_class': 11,
+#     'seed': SEED,
+#     'metric': ['multi_logloss'],
+#     'max_depth': 8}
+#
+# x_train_lgb = lgbm.Dataset(x_train, label=y_train, categorical_feature = [])
+# model = LGBMClassifier(boosting_type='gbdt', objective='multiclass',
+#                        num_class=9,early_stopping = 50,num_iteration=10000,num_leaves=31,
+#                        is_enable_sparse='true',tree_learner='data',min_data_in_leaf=600,max_depth=4,
+#                        learning_rate=0.01, n_estimators=675, max_bin=255, subsample_for_bin=50000,
+#                        min_split_gain=5, min_child_weight=5, min_child_samples=10, subsample=0.995,
+#                        subsample_freq=1, colsample_bytree=1, reg_alpha=0,
+#                        reg_lambda=0, seed=0, nthread=-1, silent=True)
+#
+# #Fit to training data
+# model.fit(x_train_lgb)
+# #Generate Predictions
+# y_pred=model.predict_proba(X_test)
+#
+#
+# cv_result_lgb = lgbm.cv(params = lgb_params,
+#                         train_set = x_train_lgb,
+#                         num_boost_round=1000,
+#                         nfold=5,
+#                         stratified=True,
+#                         early_stopping_rounds=50,
+#                         verbose_eval=100,
+#                         show_stdv=True)
+#
+# num_boost_rounds_lgb = len(cv_result_lgb['multi_logloss-mean'])
+# print('num_boost_rounds_lgb=' + str(num_boost_rounds_lgb))
+#
+# x_train_lgb = lgbm.Dataset(x_train, label=y_train, categorical_feature = [])
+# lgb.fit(lgb_params, x_train_lgb, num_boost_round=num_boost_rounds_lgb)
+#
+# lgb.feature_importances_
+# y_test_prob = lgb.predict(x_test)
+# np.array([accuracy_score(get_prob_top_n(y_test_prob, n), y_test) for n in range(11)]).cumsum()
+#
+#
+# param_grid_lg = {"max_depth": [25,50, 75],
+#               "learning_rate" : [0.01,0.05,0.1],
+#               "num_leaves": [300,900,1200],
+#               "n_estimators": [200]
+#              }
+# param_grid_lg = {"max_depth": [10], "num_leaves": [300], "n_estimators": [20]}
+# gridsearcher_rfc = gridsearch_rfecv_estimator(estimator = lgb, param_grid = param_grid_lg, rfecv = False)
+#
+# lgb = LGBMClassifier(**load_obj('GridSearch_Best_Params_LGBMClassifier'))
+# lgb.fit(x_train, y_train, categorical_feature=[])
+# lgb.predict_proba(x_test)
+#
+#
+# x_train_lgb = lgbm.Dataset(x_train, label=y_train, categorical_feature = [])
+# cv_result_lgb = lgbm.cv(param_grid_lg,
+#                        x_train_lgb,
+#                        num_boost_round=1000,
+#                        nfold=5,
+#                        stratified=True,
+#                        early_stopping_rounds=50,
+#                        verbose_eval=100,
+#                        show_stdv=True, objective= 'multiclass',
+#                        num_class = 11,
+#                        metric = 'multi_logloss')
+# num_boost_rounds_lgb = len(cv_result_lgb['multi_logloss-mean'])
+# print('num_boost_rounds_lgb=' + str(num_boost_rounds_lgb))
+# # train model
+# model_lgb = lgbm.train(lgb_params, x_train_lgb, num_boost_round=num_boost_rounds_lgb)
+# model_lgb.feature_importance
+# y_pred=model_lgb.predict(test)
+# classes = "class1,class2,class3,class4,class5,class6,class7,class8,class9".split(',')
+# subm = pd.DataFrame(y_pred, columns=classes)
+# subm['ID'] = pid
+# model_lgb.feature_importance
+#
+#
+# # Without Categorical Features
+# model2 = lgb.train(params, d_train)
+# lg.predict_proba(x_test)
+#
+# lgb_cv = lgbm.cv(params, d_train, num_boost_round=10000, nfold=3, shuffle=True, stratified=True, verbose_eval=20, early_stopping_rounds=100)
+#
+# nround = lgb_cv['multi_logloss-mean'].index(np.min(lgb_cv['multi_logloss-mean']))
+# print(nround)
+#
+# model = lgbm.train(params, d_train, num_boost_round=nround)
+#
+# #With Catgeorical Features
+# cate_features_name = ["MONTH","DAY","DAY_OF_WEEK","AIRLINE","DESTINATION_AIRPORT",
+#                  "ORIGIN_AIRPORT"]
+# model2 = lgb.train(params, d_train, categorical_feature = cate_features_name)
+# auc2(model2, train, test)
+#
+
+
+# from sklearn.metrics import accuracy_score, confusion_matrix, log_loss
+# import itertools
+# def plot_confusion_matrix(cm, classes, normalize=False, title=None, cmap=plt.cm.Blues, save = False, show = True):
+#     fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+#
+#     plt.imshow(cm, interpolation='nearest', cmap=cmap, )
+#     plt.colorbar()
+#     tick_marks = np.arange(len(classes))
+#     plt.xticks(tick_marks, classes, rotation=45)
+#     plt.yticks(tick_marks, classes)
+#
+#     if title is None:
+#         title = 'Confusion Matrix'
+#         if normalize:
+#             title = title + ' (Normalized)'
+#     plt.title(title, loc = 'center', y=1.15, fontsize = 25)
+#
+#     fmt = '.2f' if normalize else 'd'
+#     thresh = cm.max() / 2.
+#     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+#         plt.text(j, i, format(cm[i, j], fmt),
+#                  horizontalalignment="center",
+#                  color="white" if cm[i, j] > thresh else "black")
+#
+#     plt.tight_layout()
+#     plt.ylabel('True label')
+#     plt.xlabel('Predicted label')
+#
+#     if save:
+#         check_dir(IMAGE_MATRIX_DIRECTORY)
+#         saved_path = os.path.join(IMAGE_MATRIX_DIRECTORY, convert_title_to_filename(title))
+#         plt.savefig(saved_path, dpi=200, bbox_inches="tight")
+#         plt.show()
+#         print('Saved to {}'.format(saved_path))
+#     if show:
+#         plt.show()
+#
+#     plt.close()
+#
+#
+# def get_matrix(y_test, y_test_pred, y_train, y_train_pred, estimator_name, label_encoder):
+#     check_dir(TRAIN_RESULT_PATH)
+#
+#     title = 'Confusion Matrix for ' + estimator_name + ' Test'
+#     df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_test), name='True'), pd.Series(label_encoder.inverse_transform(y_test_pred), name='Predict'))
+#     df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_title_to_filename(title) + '.csv'))
+#     plot_confusion_matrix(confusion_matrix(y_test, y_test_pred), label_encoder.classes_, title = title, save = True)
+#
+#     title = 'Confusion Matrix for ' + estimator_name  + ' Train'
+#
+#     df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_train), name='True'), pd.Series(label_encoder.inverse_transform(y_train_pred), name='Predict'))
+#     df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_title_to_filename(title) + '.csv'))
+#     plot_confusion_matrix(confusion_matrix(y_train, y_train_pred), label_encoder.classes_, title = title, save = True)
+#
+#
+#
+#
+#
+# get_matrix(y_test = y_test, y_test_pred = y_test_pred, y_train = y_train, y_train_pred = y_train_pred, estimator_name = clf_name, label_encoder = label_encoder)
+
+
+# #language
+# language_map = {'en': 'AU|CA|GB|US',
+#                 'zh': 'ASIA',
+#                 'ko': 'ASIA',
+#                 'fr': 'FR',
+#                 'es': 'ES',
+#                 'de': 'DE',
+#                 'ru': 'ASIA',
+#                 'it': 'IT',
+#                 'ja': 'ASIA',
+#                 'pt': 'PT',
+#                 'sv': 'EU(Other)',
+#                 'nl': 'EU(Other)',
+#                 'pl': 'EU(Other)',
+#                 'tr': 'EU(Other)',
+#                 'da': 'EU(Other)',
+#                 'th': 'ASIA',
+#                 'cs': 'EU(Other)',
+#                 'id': 'ASIA',
+#                 'el': 'EU(Other)',
+#                 'no': 'EU(Other)',
+#                 'fi': 'EU(Other)',
+#                 'hu': 'EU(Other)',
+#                 'is': 'EU(Other)',
+#                 'ca': 'ES',
+#                 'hr': 'EU(Other)',
+#                 }
+#
+# users['language_map_country'] = users['language'].map(language_map)
+# language_df = users[['id', 'language_map_country']].groupby(['id'])['language_map_country'].apply(lambda x: '|'.join(x)).reset_index()
+# language_encoded_df = language_df['language_map_country'].str.get_dummies(sep='|')
+# languages_mapped = language_encoded_df.columns
+# language_encoded_df['id'] = language_df['id']
+# users = users.merge(language_encoded_df, how = 'left')

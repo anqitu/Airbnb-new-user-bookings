@@ -1,169 +1,226 @@
-# -*- coding: utf-8 -*-
 """
-#### prepare datas for modelling:
+ prepare datas for modelling and Association Rules:
 - Cleaning for devices
 - Drop irrelevant columns
 - Label encoding for target variable 'country destination'
 - One hot encoding for categorical variables
 - Split data into train and test
 - Standard Normalization for continuous variables
-- Split train into trainA, trainB, trainC for holdout stacking
 """
-
 import pandas as pd
 import numpy as np
 from util import *
+pd.options.display.float_format = '{:,.5f}'.format
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.max_columns', 500)
+
+MIN_TO_OTHERS = True
+if MIN_TO_OTHERS:
+    USERS_PATH = USERS_MIN_TO_OTHERS_PATH
 
 users = pd.read_csv(USERS_PATH, keep_default_na=False, na_values=[''])
+# users = users.sample(5000)
 
 target = 'country_destination'
 
 categorical_features = ['gender',
-                        'language', 'language_map_country',
+                        'language', 'language_min_to_other',
                         'affiliate_channel',
                         'affiliate_provider', 'affiliate_provider_min_to_other',
                         'first_browser', 'first_browser_min_to_other',
-                        'first_device_type', 'first_device', 'first_os',
+                        'first_device', 'first_os',
                         'first_affiliate_tracked', 'first_affiliate_tracked_min_to_other', # A user can search before they sign up.
                         'signup_app', 'signup_method',
                         'signup_flow', 'signup_flow_min_to_other',# a key to particular pages - an index for an enumerated list.
-                        'has_age',
                         'age_bkt', 'age_bkt_min_to_other',
-                        'first_active_day_is_holiday', 'date_first_booking_is_holiday']
+                        'date_account_created_month','date_first_active_month',
+                        'date_account_created_dayofweek', 'date_first_active_dayofweek']
 
-continuous_features = ['age', 'age_fix',
-                       'session_count', 'duration_sum', 'duration_median', 'duration_max',
-                       'booking_active_diff', 'first_active_day_to_next_holiday', 'date_first_booking_to_next_holiday']
+continuous_features = ['date_account_created_to_next_holiday', 'date_first_active_to_next_holiday']
 
-time_features = ['date_first_active',
-                 'date_first_active_dayofyear',
-                 'date_first_active_month',
-                 'date_first_booking',
-                 'date_first_booking_day_count',
-                 'date_first_booking_dayofyear',
-                 'date_first_booking_month',
-                 'date_first_booking_month_count',
-                 'date_first_booking_year'
-                  ]
+set(users.columns).difference(set(categorical_features)).difference(set(continuous_features))
+mapped_features = [feature for feature in users.columns if feature.endswith('_min_to_other')]
 
-device_columns = [col for col in users.columns if col.startswith('device')]
-os_columns = [col for col in users.columns if col.startswith('os')]
-country_columns = ['ASIA', 'AU', 'CA', 'DE', 'ES', 'EU(Other)', 'FR', 'GB', 'IT', 'PT', 'US']
+if MIN_TO_OTHERS:
+    for feature in mapped_features:
+        users[feature.replace('_min_to_other', '')] = users[feature]
+        categorical_features.remove(feature)
+else:
+    for feature in mapped_features:
+        categorical_features.remove(feature)
 
-set(users.columns).difference(set(categorical_features)) \
-                  .difference(set(continuous_features)) \
-                  .difference(set(time_features)) \
-                  .difference(set(device_columns)) \
-                  .difference(set(os_columns)) \
-                  .difference(set(country_columns))
 
-mapped_features = [feature for feature in categorical_features if feature.endswith('_min_to_other')]
-for feature in mapped_features:
-    users[feature.replace('_min_to_other', '')] = users[feature]
-    categorical_features.remove(feature)
+""" keep useful columns """
+users = users[categorical_features + continuous_features + [target]]
 
-""" unmatched devices and os"""
-# ['device_Desktop', 'device_Others', 'device_Phone', 'device_Tablet']
-# ['os_Android', 'os_Linux', 'os_OS', 'os_Others', 'os_Windows']
-device_unmatched_user_ids = list(users[((users['first_device'] == 'Desktop') & (users['device_Desktop'] != 1)) |
-                      ((users['first_device'] == 'Phone') & (users['device_Phone'] != 1)) |
-                      ((users['first_device'] == 'Tablet') & (users['device_Tablet'] != 1)) |
-                      ((users['first_device'] == 'Others') & (users['device_Others'] != 1)) |
-                      ((users['first_os'] == 'Desktop') & (users['os_Android'] != 1)) |
-                      ((users['first_os'] == 'Desktop') & (users['os_Linux'] != 1)) |
-                      ((users['first_os'] == 'Desktop') & (users['os_OS'] != 1)) |
-                      ((users['first_os'] == 'Desktop') & (users['os_Windows'] != 1)) |
-                      ((users['first_os'] == 'Others') & (users['os_Others'] != 1))][['first_device_type', 'id']]['id'])
-# len(device_unmatched_user_ids) #6118
-
-users = pd.get_dummies(users, columns = ['first_device', 'first_os'])
-# users[device_columns].sum()
-# users[os_columns].sum()
-for col in device_columns:
-    users[col] = users.apply(lambda row: max(row[col], row['first_' + col]), axis = 1)
-for col in os_columns:
-    users[col] = users.apply(lambda row: max(row[col], row['first_' + col]) if ('first_' + col) in row else row[col], axis = 1)
-# users[device_columns].sum()
-# users[os_columns].sum()
-
-"""drop columns"""
-for col in ['first_os', 'first_device', 'first_device_type',
-            'date_first_booking_is_holiday', 'language', 'age_bkt']:
-    categorical_features.remove(col)
-
-for col in ['age', 'booking_active_diff', 'date_first_booking_to_next_holiday']:
-    continuous_features.remove(col)
-
-for col in ['date_first_active', 'date_first_booking', 'date_first_booking_day_count',
-             'date_first_booking_dayofyear', 'date_first_booking_month', 'date_first_booking_month_count',
-             'date_first_booking_year']:
-    time_features.remove(col)
-
-# users[categorical_features].nunique()
-
-users = users[categorical_features + continuous_features + time_features +
-              device_columns + os_columns + country_columns + [target]]
-
-"""#### label encoding for destination column """
+""" label encoding for destination column """
 from sklearn.preprocessing import LabelEncoder
 label_encoder = LabelEncoder()
 users[target] = label_encoder.fit_transform(users[target])
 save_label_encoder(label_encoder, 'label_encoder_country_destination')
 
-"""#### One hot encoding for categorical features """
+""" One hot encoding for categorical features """
+users.shape
 users = pd.get_dummies(users, columns = categorical_features)
+users.sum().min()
 
-"""#### Split data into train & test """
+""" Train-Val-Test split """
 from sklearn.model_selection import train_test_split
-train, test = train_test_split(users, test_size=0.2, stratify = users[target],random_state=SEED)
+train_all, test = train_test_split(users, test_size=0.2, stratify = users[target], random_state = SEED)
+train, val = train_test_split(train_all, test_size=0.25, stratify = train_all[target], random_state = SEED)
+train.shape
+test.shape
+val.shape
 
-"""#### standard normalization for continous values """
+""" standard normalization for continous values """
 from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
 train[continuous_features] = scaler.fit_transform(train[continuous_features])
+val[continuous_features] = scaler.transform(val[continuous_features])
 test[continuous_features] = scaler.transform(test[continuous_features])
 
-train.to_csv('data/train.csv', index = False)
-test.to_csv('data/test.csv', index = False)
+train.to_csv(TRAIN_RAW_PATH, index = False)
+val.to_csv(VAL_RAW_PATH, index = False)
+test.to_csv(TEST_PATH, index = False)
 
-def get_percentage(data, column):
-    count_df = data[column].value_counts().reset_index().rename(columns = {column: 'Count', 'index': column})
-    count_df['%'] = count_df['Count'] / data.shape[0]
-    print(count_df)
-    return count_df
+""" SMOTE """
+from imblearn.combine import SMOTETomek
+smt = SMOTETomek(random_state=SEED)
 
-"""#### train, test ratio """
-print('Train Shape: ' + str(train.shape))
-train_country_distribution = get_percentage(train, target)
-train_country_distribution.to_csv('data/country_distribution_train.csv', index = False)
-print('Test Shape: ' + str(test.shape))
-test_country_distribution = get_percentage(test, target)
-test_country_distribution.to_csv('data/country_distribution_test.csv', index = False)
-# Train Shape: (59052, 85)
-#     country_destination  Count         %
-# 0                     7  36033  0.610191
-# 1                    10  16076  0.272235
-# 2                    11   2924  0.049516
-# 3                     4   1148  0.019440
-# 4                     6    783  0.013260
-# 5                     5    585  0.009907
-# 6                     3    566  0.009585
-# 7                     1    352  0.005961
-# 8                     2    200  0.003387
-# 9                     8    198  0.003353
-# 10                    0    121  0.002049
-# 11                    9     66  0.001118
-# Test Shape: (14763, 85)
-#     country_destination  Count         %
-# 0                     7   9008  0.610174
-# 1                    10   4019  0.272235
-# 2                    11    731  0.049516
-# 3                     4    287  0.019440
-# 4                     6    196  0.013276
-# 5                     5    146  0.009890
-# 6                     3    141  0.009551
-# 7                     1     88  0.005961
-# 8                     2     50  0.003387
-# 9                     8     49  0.003319
-# 10                    0     31  0.002100
-# 11                    9     17  0.001152
+# for train
+percentage = get_percentage(train, target)
+le = load_label_encoder('label_encoder_' + target)
+percentage[target] = percentage[target].map(dict(zip(range(0, 11), le.classes_)))
+print('Before OverSampling, the shape of train: {}'.format(train.shape))
+print("Distribution of country destination: ")
+print(percentage)
+percentage.to_csv('data/country_distribution_train.csv', index = False)
+
+X_train_smote, y_train_smote = smt.fit_sample(train.drop(columns = target).values, train[target].ravel())
+train_smote = np.concatenate([X_train_smote, y_train_smote.reshape(-1, 1)], axis = 1)
+train_smote = pd.DataFrame(train_smote)
+columns = list(train.columns)
+columns.remove(target)
+columns.append(target)
+train_smote.columns = columns
+train_smote.to_csv(TRAIN_SMOTE_PATH, index = False)
+
+percentage = get_percentage(train_smote, target)
+le = load_label_encoder('label_encoder_' + target)
+percentage[target] = percentage[target].map(dict(zip(range(0, 11), le.classes_)))
+print('After OverSampling, the shape of train_smote: {}'.format(train_smote.shape))
+print("Distribution of country destination: ")
+print(percentage)
+percentage.to_csv('data/country_distribution_train_smote.csv', index = False)
+
+# for val
+percentage = get_percentage(val, target)
+le = load_label_encoder('label_encoder_' + target)
+percentage[target] = percentage[target].map(dict(zip(range(0, 11), le.classes_)))
+print('Before OverSampling, the shape of val: {}'.format(val.shape))
+print("Distribution of country destination: ")
+print(percentage)
+percentage.to_csv('data/country_distribution_val.csv', index = False)
+
+X_val_smote, y_val_smote = smt.fit_sample(val.drop(columns = target), val[target])
+val_smote = np.concatenate([X_val_smote, y_val_smote.reshape(-1, 1)], axis = 1)
+val_smote = pd.DataFrame(val_smote)
+columns = list(val.columns)
+columns.remove(target)
+columns.append(target)
+val_smote.columns = columns
+val_smote.to_csv(VAL_SMOTE_PATH, index = False)
+
+percentage = get_percentage(val_smote, target)
+le = load_label_encoder('label_encoder_' + target)
+percentage[target] = percentage[target].map(dict(zip(range(0, 11), le.classes_)))
+print('After OverSampling, the shape of val_smote: {}'.format(val_smote.shape))
+print("Distribution of country destination: ")
+print(percentage)
+percentage.to_csv('data/country_distribution_val_smote.csv', index = False)
+
+# for test
+percentage = get_percentage(test, target)
+le = load_label_encoder('label_encoder_' + target)
+percentage[target] = percentage[target].map(dict(zip(range(0, 11), le.classes_)))
+print('The shape of test: {}'.format(test.shape))
+print("Distribution of country destination: ")
+print(percentage)
+percentage.to_csv('data/country_distribution_test.csv', index = False)
+
+for col in train.columns:
+    print(col)
+
+val.sum()
+"""
+Before OverSampling, the shape of train: (53344, 187)
+Distribution of country destination:
+   country_destination  Count         %
+0                   US  37425  0.701578
+1                other   6056  0.113527
+2                   FR   3013  0.056482
+3                   IT   1701  0.031887
+4                   GB   1394  0.026132
+5                   ES   1349  0.025289
+6                   CA    857  0.016066
+7                   DE    637  0.011941
+8                   NL    458  0.008586
+9                   AU    323  0.006055
+10                  PT    131  0.002456
+After OverSampling, the shape of train_smote: (411049, 187)
+Distribution of country destination:
+   country_destination  Count         %
+0                   PT  37425  0.091048
+1                   AU  37424  0.091045
+2                   NL  37417  0.091028
+3                   DE  37415  0.091023
+4                   CA  37403  0.090994
+5                   ES  37388  0.090958
+6                   GB  37378  0.090933
+7                   IT  37369  0.090911
+8                   FR  37330  0.090816
+9                   US  37269  0.090668
+10               other  37231  0.090576
+Before OverSampling, the shape of val: (17782, 187)
+Distribution of country destination:
+   country_destination  Count         %
+0                   US  12476  0.701608
+1                other   2019  0.113542
+2                   FR   1005  0.056518
+3                   IT    567  0.031886
+4                   GB    465  0.026150
+5                   ES    450  0.025306
+6                   CA    285  0.016027
+7                   DE    212  0.011922
+8                   NL    152  0.008548
+9                   AU    108  0.006074
+10                  PT     43  0.002418
+After OverSampling, the shape of val_smote: (137144, 187)
+Distribution of country destination:
+   country_destination  Count         %
+0                   NL  12476  0.090970
+1                   DE  12476  0.090970
+2                   AU  12476  0.090970
+3                   PT  12475  0.090963
+4                   GB  12473  0.090948
+5                   IT  12473  0.090948
+6                   CA  12473  0.090948
+7                   ES  12470  0.090926
+8                   FR  12461  0.090861
+9                   US  12446  0.090751
+10               other  12445  0.090744
+The shape of test: (17782, 187)
+Distribution of country destination:
+   country_destination  Count         %
+0                   US  12475  0.701552
+1                other   2019  0.113542
+2                   FR   1005  0.056518
+3                   IT    567  0.031886
+4                   GB    465  0.026150
+5                   ES    450  0.025306
+6                   CA    286  0.016084
+7                   DE    212  0.011922
+8                   NL    152  0.008548
+9                   AU    108  0.006074
+10                  PT     43  0.002418
+"""

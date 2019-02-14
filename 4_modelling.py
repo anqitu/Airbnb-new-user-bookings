@@ -2,46 +2,35 @@
 1. Feature Importance by RFECV
 2. Feature Selection using sklearn.feature_selection.RFECV on train
 3. Fine tune model, using cross validation. —> must sampled after splitting
-    1. model_original on train, using GridSeachCV
-    2. model_sampled on sampled train, using ParamSearch, each with validation before sampled.
-4. Meta holdout scheme with OOF meta-features.
-    4.1. Fit models to whole train_data and predict for test_data.
-       Let's call these features test_meta --> Save scores for each model's prediction
-    4.2. Split train into K folds. Iterate through each fold:
-       - retain N diverme models on all folds except current fold.
-       - predict for the current fold
-       After this step, for each object in train_data,
-       we will have N meta-features (also known as out-of-fold predictions, OOF).
-       Lets call them train_meta
-    4.3. Split train_meta into two parts: train_metaA and train_metaB.
-       Fit a meta-model to train_metaA while validating its hyperparameters on train_metaB.
-    4.4. When the meta-model is validated, fit it to train_meta and predict for test_meta --> Save scores for meta-model's prediction
-    * For oversampling version: all the data used for training any model are sampled right before fitting.
-5. Compare performance for every single model, stacked model and oversampled model.
+
+So, we have train, val and test train_smote, val_smote
+
+Steps for Original:
+    - Perform self-implemented grid search by training on train, validating on val to get best hyperparameters
+    - Use the best hyperparameter to train a model on train + val
+    - Predict and save probability for test
+Steps for Oversampled:
+- Perform self-implemented grid search by training on train_smote, validating on val to get best hyperparameters
+- Use the best hyperparameter to train a model on train_smote + val_smote
+- Predict and save probability for test
 """
 
 """ #### Environment Setup """
-import os
-os.getcwd()
-WORKING_DIR = '/Users/anqitu/Workspaces/NTU/Airbnb-new-user-bookings'
-# WORKING_DIR = '/content'
-# os.listdir(WORKING_DIR)
-
 # import libraries
 import time
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from xgboost.sklearn import XGBClassifier
+from sklearn.feature_selection import RFECV
+from sklearn.metrics import make_scorer, log_loss, accuracy_score
 
 from util import *
+from myhypopt.model_selection import GridSearch
+# from hypopt.model_selection import GridSearch
 
-# Draw inline
-%matplotlib inline
-
-# Set figure aesthetics
-plt.style.use('fivethirtyeight')
-plt.rcParams["figure.figsize"] = [15,8]
 
 # Ignore warnings
 import warnings
@@ -51,246 +40,181 @@ warnings.filterwarnings('ignore')
 pd.set_option('display.max_columns', 500)
 pd.options.display.float_format = '{:,.5f}'.format
 
+""" Constant """
+MAP_MIN_TO_OTHER = False
+
+if MAP_MIN_TO_OTHER:
+    TRAIN_RAW_PATH = TRAIN_RAW_MIN_TO_OTHERS_PATH
+    VAL_RAW_PATH = VAL_RAW_MIN_TO_OTHERS_PATH
+
+    TRAIN_SMOTE_PATH = TRAIN_SMOTE_MIN_TO_OTHERS_PATH
+    VAL_SMOTE_PATH = VAL_SMOTE_MIN_TO_OTHERS_PATH
+
 
 """#### Load Data"""
-train = pd.read_csv(TRAIN_PATH)
-# train = train.sample(5000)
 test = pd.read_csv(TEST_PATH)
+train_raw = pd.read_csv(TRAIN_RAW_PATH)
+val_raw = pd.read_csv(VAL_RAW_PATH)
+train_smote = pd.read_csv(TRAIN_SMOTE_PATH)
+val_smote = pd.read_csv(VAL_SMOTE_PATH)
+
+print('Train Shape: ' + str(train_raw.shape))
+print('Val Shape: ' + str(val_raw.shape))
+print('Sampled Train Shape: ' + str(train_smote.shape))
+print('Sampled Val Shape: ' + str(val_smote.shape))
+print('Test Shape: ' + str(test.shape))
+
+target = 'country_destination'
+y_test = test[target]
+x_test = test.drop(columns = target)
+y_train_raw = train_raw[target]
+x_train_raw = train_raw.drop(columns = target)
+y_val_raw = val_raw[target]
+x_val_raw = val_raw.drop(columns = target)
+y_train_smote = train_smote[target]
+x_train_smote = train_smote.drop(columns = target)
+y_val_smote = val_smote[target]
+x_val_smote = val_smote.drop(columns = target)
+
+run_times_df = pd.DataFrame()
 
 """#### Useful Functions"""
-from sklearn.metrics import accuracy_score, confusion_matrix
-import itertools
-def plot_confusion_matrix(cm, classes, normalize=False, title=None, cmap=plt.cm.Blues, save = False, show = True):
-    fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+def top_3_accuracy(y_true, y_prob):
+    score = np.array([accuracy_score(get_prob_top_n(y_prob, n), y_true) for n in range(3)]).sum()
+    return score
+def neg_log_loss(y_true, y_prob):
+    score = -1. * log_loss(y_true, y_prob)
+    return score
 
-    plt.imshow(cm, interpolation='nearest', cmap=cmap, )
-    plt.colorbar()
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
+my_scorer = make_scorer(top_3_accuracy, needs_proba = True, greater_is_better=True)
+gridsearch_param = {'scoring': my_scorer, 'verbose': 2 }
+gridsearch_param = {'scoring': 'neg_log_loss', 'verbose': 2 }
 
-    if title is None:
-        title = 'Confusion Matrix'
-        if normalize:
-            title = title + ' (Normalized)'
-    plt.title(title, loc = 'center', y=1.15, fontsize = 25)
+# Grid-search all parameter combinations using a validation set.
+def gridsearch_estimator(estimator, param_grid, x_train, y_train, x_val, y_val, smote):
 
-    fmt = '.2f' if normalize else 'd'
-    thresh = cm.max() / 2.
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        plt.text(j, i, format(cm[i, j], fmt),
-                 horizontalalignment="center",
-                 color="white" if cm[i, j] > thresh else "black")
-
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-
-    if save:
-        check_dir(IMAGE_MATRIX_DIRECTORY)
-        saved_path = os.path.join(IMAGE_MATRIX_DIRECTORY, convert_title_to_filename(title))
-        plt.savefig(saved_path, dpi=200, bbox_inches="tight")
-        plt.show()
-        print('Saved to {}'.format(saved_path))
-    if show:
-        plt.show()
-
-    plt.close()
-
-
-def get_matrix(y_test, y_test_pred, y_train, y_train_pred, estimator_name, label_encoder):
+    if smote not in ['', '_Smote']:
+        print('smote must be "", or "_Smote"')
     check_dir(TRAIN_RESULT_PATH)
 
-    title = 'Confusion Matrix for ' + estimator_name + ' Test'
-    df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_test), name='True'), pd.Series(label_encoder.inverse_transform(y_test_pred), name='Predict'))
-    df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_title_to_filename(title) + '.csv'))
-    plot_confusion_matrix(confusion_matrix(y_test, y_test_pred), label_encoder.classes_, title = title, save = True)
+    estimatorName = estimator.__class__.__name__ + smote
 
-    title = 'Confusion Matrix for ' + estimator_name  + ' Train'
+    print(current_time() + ': Start grid searching for ' + estimatorName)
+    start = time.perf_counter()
+    gridsearcher = GridSearch(model = estimator, param_grid = param_grid)
+    gridsearcher.fit(x_train, y_train, x_val, y_val, **gridsearch_param)
+    run = time.perf_counter() - start
+    print('Grid search for {} runs for {:.2f} seconds.'.format(estimatorName, run))
 
-    df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_train), name='True'), pd.Series(label_encoder.inverse_transform(y_train_pred), name='Predict'))
-    df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_title_to_filename(title) + '.csv'))
-    plot_confusion_matrix(confusion_matrix(y_train, y_train_pred), label_encoder.classes_, title = title, save = True)
+    save_obj(gridsearcher.best_params, 'GridSearch_Best_Params_' + estimatorName)
+    save_obj(gridsearcher.best_estimator_.get_params(), 'Params_' + estimatorName)
 
-# Plot number of features VS. cross-validation scores
-def plot_estimator_no_feature_vs_accuracy_score(rfecv_result, estimatorName, title = None, save = False, show = True):
-    plt.figure()
-    plt.xlabel("Number of features selected")
-    plt.ylabel("Cross validation score (Accuracy)")
-    plt.plot(range(1, len(rfecv_result.grid_scores_) + 1), rfecv_result.grid_scores_)
-    plt.ylim([0.4,0.7])
+    print(current_time() + ': Finished grid searching for ' + estimatorName)
+    print('Best Params: \n{}'.format(gridsearcher.best_params))
+    return gridsearcher
 
-    if title is None:
-        title = 'Number of Features vs Accuracy Score for ' + estimatorName
-    plt.title(title, loc = 'center', y=1.1, fontsize = 25)
-
-    if save:
-        check_dir(IMAGE_BIN_DIRECTORY)
-        saved_path = os.path.join(IMAGE_BIN_DIRECTORY, convert_title_to_filename(title))
-        fig.savefig(saved_path, dpi=200, bbox_inches="tight")
-        print('Saved to {}'.format(saved_path))
-    if show:
-        plt.show()
-
-    plt.close()
-
-def train_clf(clf, x_train, x_test):
+def train_clf(estimator, x_train, y_train, x_val, y_val, x_test, y_test, smote):
     check_dir(TRAIN_RESULT_PATH)
 
-    clf_name = clf.__class__.__name__
+    if smote not in ['', '_Smote']:
+        print('smote must be "", or "_Smote"')
+    estimatorName = estimator.__class__.__name__ + smote
+    x_train = pd.concat([x_train, x_val])
+    y_train = pd.concat([y_train, y_val])
 
-    x_train_transformed = estimators_RFECV[clf.__class__.__name__].transform(x_train)
-    x_test_transformed = estimators_RFECV[clf.__class__.__name__].transform(x_test)
-
-    print(current_time() + ': Start training ' + clf_name)
+    print(current_time() + ': Start training ' + estimatorName)
     start_total = time.perf_counter()
-    clf.fit(x_train_transformed, y_train)
+    estimator.fit(x_train, y_train)
     run_total = time.perf_counter() - start_total
-    print(current_time() + ': Finish training ' + clf_name)
-    run_times_df[clf_name] = [run_total]
+    print(current_time() + ': Finish training ' + estimatorName)
 
-    y_train_pred = clf.predict(x_train_transformed)
-    y_test_pred = clf.predict(x_test_transformed)
-    train_result_df['y_train_pred_' + clf_name] = y_train_pred
-    test_result_df['y_test_pred_' + clf_name] = y_test_pred
+    run_times_df[estimatorName] = [run_total]
 
-    accuracy_scores = []
-    accuracy_scores.append(accuracy_score(y_train_pred, y_train))
-    accuracy_scores.append(accuracy_score(y_test_pred, y_test))
-    pd.DataFrame(clf.predict_proba(x_train_transformed)).to_csv(os.path.join(TRAIN_RESULT_PATH,"Prob_Train_{}.csv").format(clf_name), index = False)
-    pd.DataFrame(clf.predict_proba(x_test_transformed)).to_csv(os.path.join(TRAIN_RESULT_PATH,"Prob_Test_{}.csv").format(clf_name), index = False)
+    x_train_prob = estimator.predict_proba(x_train)
+    x_test_prob = estimator.predict_proba(x_test)
+    np.save(os.path.join(TRAIN_RESULT_PATH, "Prob_Train_{}.npy".format(estimatorName)), x_train_prob)
+    np.save(os.path.join(TRAIN_RESULT_PATH, "Prob_Test_{}.npy".format(estimatorName)), x_test_prob)
 
-    score_df = pd.DataFrame(data = {'Prediction': ['Train Prediction', 'Test Prediction'], 'Accuracy Score': accuracy_scores})
-    score_df.to_csv(os.path.join(TRAIN_RESULT_PATH,'Scores_for_{}.csv'.format(clf_name)), index = False)
+    print(current_time() + ': Saved Probability for Train and Test'.format(estimatorName))
+    save_model(estimator, estimatorName)
 
-    get_matrix(y_test = y_test, y_test_pred = y_test_pred,
-                y_train = y_train, y_train_pred = y_train_pred,
-                estimator_name = clf_name, label_encoder = label_encoder)
+    print('Train Score for Optimized Parameters:', top_3_accuracy(y_train, x_train_prob))
+    print('Test Score for Optimized Parameters:', top_3_accuracy(y_test, x_test_prob))
 
-    print(current_time() + ': Finish getting confusion matrix for ' + clf_name)
+    return estimator
 
-    save_model(clf, clf.__class__.__name__)
-
-    return clf
-
-def get_feature_importance_by_tree(clf):
+def get_feature_importance_by_tree(estimator, smote):
     check_dir(TRAIN_RESULT_PATH)
-    feature_importance = pd.DataFrame(data = {'feature': x_train.columns, 'feature_importance': clf.feature_importances_})
-    feature_importance.sort_values(['feature_importance'], ascending = False)
-    feature_importance.to_csv(os.path.join(TRAIN_RESULT_PATH,'Feature_Importance_{}.csv').format(clf.__class__.__name__), index = False)
+    if smote not in ['', '_Smote']:
+        print('smote must be "", or "_Smote"')
+
+    estimatorName = estimator.__class__.__name__ + smote
+    feature_importance = pd.DataFrame(data = {'Feature': x_train_raw.columns, 'Feature Importance': estimator.feature_importances_})
+    feature_importance = feature_importance.sort_values(['Feature Importance'], ascending = False)
+    feature_importance.to_csv(os.path.join(TRAIN_RESULT_PATH,'Feature_Importance_{}.csv').format(estimatorName), index = False)
 
     return feature_importance
 
-import pickle
-def save_obj(obj, name):
-    with open(os.path.join(TRAIN_RESULT_PATH, name + '.pkl'), 'wb') as f:
-        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
-
-def load_obj(name):
-    with open(os.path.join(TRAIN_RESULT_PATH, name + '.pkl'), 'rb') as f:
-        return pickle.load(f)
-
-"""#### X and Y """
-target = 'country_destination'
-label_encoder = load_label_encoder('label_encoder_country_destination')
-y_train = train[target]
-y_test = test[target]
-x_train = train.drop(columns = target)
-x_test = test.drop(columns = target)
-
-train_result_df = pd.DataFrame(data = {'y_train': y_train})
-test_result_df = pd.DataFrame(data = {'y_test': y_test})
-run_times_df = pd.DataFrame()
-
-
-"""
-1&2. Feature Importance & Feature Selection by RFECV
-3. Fine tune model, using cross validation.
-- model_original on train, using GridSeachCV
-"""
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier
-from xgboost.sklearn import XGBClassifier
-from sklearn.feature_selection import RFECV
-from sklearn.model_selection import GridSearchCV
-
-estimators_params = {}
-estimators_RFECV = {}
-gridsearchers = {}
-rfecv_param = {'cv': 3,
-               'scoring': 'accuracy',
-               'n_jobs': None,
-               'verbose': 2}
-
-gridsearch_param = {'cv': 3,
-                    'scoring': 'accuracy',
-                    'n_jobs': -1,
-                    'verbose': 2,
-                    'refit': True}
-
-def gridsearch_rfecv_estimator(estimator, param_grid):
-    check_dir(TRAIN_RESULT_PATH)
-
-    estimatorName = estimator.__class__.__name__
-    selector = RFECV(estimator, **rfecv_param)
-    gridsearcher = GridSearchCV(selector, param_grid, **gridsearch_param)
-
-    print(current_time() + ': Start training ' + estimatorName)
-    start = time.perf_counter()
-    gridsearcher.fit(x_train, y_train)
-    run = time.perf_counter() - start
-    print('{} runs for {:.2f} seconds.'.format(estimatorName, run))
-
-    rfecv_result = gridsearcher.best_estimator_
-    estimators_RFECV[estimatorName] = rfecv_result
-    rfe_result_rank = pd.DataFrame(data = {'Ranking': rfecv_result.ranking_, 'Column': x_train.columns}).sort_values('Ranking')
-    plot_estimator_no_feature_vs_accuracy_score(rfecv_result, estimatorName)
-
-    estimators_params[estimatorName]= gridsearcher.best_estimator_.estimator.get_params()
-    gridsearchers[estimatorName] = gridsearcher
-    save_obj(gridsearcher.best_params_, 'GridSearch_Best_Params_' + estimatorName)
-    save_obj(gridsearcher.best_estimator_.estimator.get_params(), 'Params_' + estimatorName)
-
-    print(gridsearcher.best_params_)
-
-    return gridsearcher
-
 """#### LogisticRegression"""
 param_grid_lr = [
-    {'estimator__C': [0.01, 0.1, 1, 5, 10],
-     'estimator__penalty': ['l2', 'l1'],
-     'estimator__solver' : ['liblinear'],
-     'estimator__multi_class' : ['ovr'],
-     'estimator__class_weight': [None, 'balanced'],
-     'estimator__max_iter': [1000]}]
+    {'C': [0.01, 0.1, 1, 5, 10],
+     'penalty': ['l2', 'l1'],
+     'solver' : ['liblinear'],
+     'multi_class' : ['ovr'],
+     'class_weight': [None, 'balanced'],
+     'max_iter': [1000]}]
 
-param_grid_lr = [
-    {'estimator__C': [1],
-     'estimator__penalty': ['l2'],
-     'estimator__solver' : ['liblinear'],
-     'estimator__multi_class' : ['ovr'],
-     'estimator__class_weight': [None],
-     'estimator__max_iter': [1000]}]
+param_grid_lr = {'C': [1],
+     'penalty': ['l2'],
+     'solver' : ['liblinear'],
+     'multi_class' : ['ovr'],
+     'class_weight': [None],
+     'max_iter': [1000]}
 
-lr = LogisticRegression(random_state = SEED)
-gridsearcher_lr = gridsearch_rfecv_estimator(estimator = lr, param_grid = param_grid_lr)
-load_obj('GridSearch_Best_Params_LogisticRegression')
+gridsearcher_lr_raw = gridsearch_estimator(estimator = LogisticRegression(random_state = SEED), param_grid = param_grid_lr, smote = '',
+                x_train = x_train_raw, y_train = y_train_raw, x_val = x_val_raw, y_val = y_val_raw)
+gridsearcher_lr_smote = gridsearch_estimator(estimator = LogisticRegression(random_state = SEED), param_grid = param_grid_lr, smote = '_Smote',
+                x_train = x_train_smote, y_train = y_train_smote, x_val = x_val_raw, y_val = y_val_raw)
 
-lr = LogisticRegression(**estimators_params['LogisticRegression'])
-lr = train_clf(lr, x_train, x_test)
+lr_raw = LogisticRegression(**load_obj('Params_LogisticRegression'))
+lr_raw = train_clf(lr_raw, smote = '', x_train = x_train_raw, y_train = y_train_raw,
+                x_val = x_val_raw, y_val = y_val_raw, x_test = x_test, y_test = y_test)
+lr_smote = LogisticRegression(**load_obj('Params_LogisticRegression_Smote'))
+lr_raw = train_clf(lr_raw, smote = '_Smote', x_train = x_train_smote, y_train = y_train_smote,
+                x_val = x_val_smote, y_val = y_val_smote, x_test = x_test, y_test = y_test)
 
-# Coefficient Abosolute Average
-# lr = LogisticRegression(**load_obj('Params_LogisticRegression'))
+np.array([accuracy_score(get_prob_top_n(lr_raw.predict_proba(x_test), n), y_test) for n in range(11)]).cumsum()
+
+"""@TODO"""
+# if rfecv:
+#     rfecv_result = pd.read_csv(os.path.join(TRAIN_RESULT_PATH,'RFECV_RANK_{}.csv').format(clf_name))
+#     selected_features = list(rfecv_result[rfecv_result['Ranking'] == 1]['Column'])
+#     x_train = x_train[selected_features]
+#     x_test = x_test[selected_features]
+# rfecv_param = {'cv': 3,
+#                'scoring': 'neg_log_loss',
+#                # 'scoring': 'accuracy',
+#                'n_jobs': None,
+#                'verbose': 2}
+# if rfecv:
+#     rfecv_result = gridsearcher.best_estimator_
+#     estimators_RFECV[estimatorName] = rfecv_result
+#     rfe_result_rank = pd.DataFrame(data = {'Ranking': rfecv_result.ranking_, 'Column': x_train.columns}).sort_values('Ranking')
+#     rfe_result_rank.to_csv(os.path.join(TRAIN_RESULT_PATH,'RFECV_RANK_{}.csv').format(estimatorName), index = False)
+#
+# # Coefficient Abosolute Average
+# lr = LogisticRegression()
 # lr.fit(x_train, y_train)
 #
-# # lr_coefs_df = pd.DataFrame(data = lr.coef_)
-# # lr_coefs_df.index = label_encoder.inverse_transform(lr_coefs_df.index)
-# # lr_coefs_df = lr_coefs_df.transpose()
-# # lr_coefs_df['Column'] = x_train.columns
+# lr_coefs_df = pd.DataFrame(data = lr.coef_)
+# lr_coefs_df.index = label_encoder.inverse_transform(lr_coefs_df.index)
+# lr_coefs_df = lr_coefs_df.transpose()
+# lr_coefs_df['Column'] = x_train.columns
+# lr_coefs_df.to_csv(os.path.join(TRAIN_RESULT_PATH,'Feature_Importance_{}.csv').format(estimatorName), index = False)
 #
 # lr_abs_coefs_df = pd.DataFrame(data = {'Column': x_train.columns, 'Coefficient Abosolute Average': np.absolute(lr.coef_).mean(axis = 0)})
 # lr_abs_coefs_df = lr_abs_coefs_df.sort_values(['Coefficient Abosolute Average'], ascending=False)
+# lr_abs_coefs_df
 #
 # TOP = 12
 # fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
@@ -300,144 +224,136 @@ lr = train_clf(lr, x_train, x_test)
 # plt.xticks(rotation=45)
 # title = 'Coefficient Abosolute Average of Columns (Top {})'.format(TOP)
 # plt.title(title, loc = 'center', y=1.1, fontsize = 20)
-# saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
+# saved_path = os.path.join(IMAGE_MODEL_DIRECTORY, convert_title_to_filename(title))
 # plt.savefig(saved_path, dpi=200, bbox_inches="tight")
 
 
 """#### DecisionTreeClassifier"""
-tree = DecisionTreeClassifier(random_state = SEED)
-param_grid_tree = {'estimator__min_samples_split' : [10, 30, 50, 100, 150, 200, 300, 400, 500],
-                   'estimator__max_depth': [4,8,12],
-                   'estimator__class_weight': ['balanced', None]}
-param_grid_tree = {'estimator__min_samples_split' : [400],
-                   'estimator__max_depth': [3],
-                   'estimator__class_weight': [None]}
-gridsearcher_tree = gridsearch_rfecv_estimator(estimator = tree, param_grid = param_grid_tree)
-load_obj('GridSearch_Best_Params_DecisionTreeClassifier')
-gridsearcher_tree.best_estimator_.estimator_
+param_grid_tree = {'min_samples_split' : [10, 30, 50, 100, 150, 200, 300, 400, 500],
+                   'max_depth': [4,8,12],
+                   'class_weight': ['balanced', None]}
+param_grid_tree = {'min_samples_split' : [500],
+                   'max_depth': [3, 4, 5],
+                   'class_weight': [None]}
+gridsearcher_tree_raw = gridsearch_estimator(estimator = DecisionTreeClassifier(random_state = SEED), param_grid = param_grid_tree, smote = '',
+                x_train = x_train_raw, y_train = y_train_raw, x_val = x_val_raw, y_val = y_val_raw)
+gridsearcher_tree_smote = gridsearch_estimator(estimator = DecisionTreeClassifier(random_state = SEED), param_grid = param_grid_tree, smote = '_Smote',
+                x_train = x_train_smote, y_train = y_train_smote, x_val = x_val_raw, y_val = y_val_raw)
 
-dtree = DecisionTreeClassifier(**estimators_params['DecisionTreeClassifier'])
-dtree = train_clf(dtree, x_train, x_test)
+tree_raw = DecisionTreeClassifier(**load_obj('Params_DecisionTreeClassifier'))
+tree_raw = train_clf(tree_raw, smote = '', x_train = x_train_raw, y_train = y_train_raw,
+                x_val = x_val_raw, y_val = y_val_raw, x_test = x_test, y_test = y_test)
+tree_smote = DecisionTreeClassifier(**load_obj('Params_DecisionTreeClassifier_Smote'))
+tree_smote = train_clf(tree_smote, smote = '_Smote', x_train = x_train_smote, y_train = y_train_smote,
+                x_val = x_val_smote, y_val = y_val_smote, x_test = x_test, y_test = y_test)
 
 
-# params = load_obj('Params_DecisionTreeClassifier')
-# dtree = DecisionTreeClassifier(**params)
-# dtree.fit(x_train, y_train)
-# accuracy_score(dtree.predict(x_test), y_test)
-# import graphviz
-# from sklearn import tree
-# dot_data = tree.export_graphviz(dtree, out_file=None,
-#                                 feature_names = x_train.columns,
-#                                 class_names = True,
-#                                 filled = True, rounded = True, proportion = False, precision = 2)
-# graph = graphviz.Source(dot_data, format="png")
-# save_path = os.path.join(IMAGE_DIRECTORY, 'tree', '3')
-# graph.render(save_path)
-# print(label_encoder.classes_[7]) #NDF
-# print(label_encoder.classes_[10]) #US
+# np.array([accuracy_score(get_prob_top_n(tree_smote.predict_proba(x_train_smote), n), y_train_smote) for n in range(11)]).cumsum()
+# np.array([accuracy_score(get_prob_top_n(tree_smote.predict_proba(x_train_raw), n), y_train_raw) for n in range(11)]).cumsum()
+# np.array([accuracy_score(get_prob_top_n(tree_smote.predict_proba(x_val_raw), n), y_val_raw) for n in range(11)]).cumsum()
+# np.array([accuracy_score(get_prob_top_n(tree_smote.predict_proba(x_val_raw), n), y_val_raw) for n in range(11)]).cumsum()
+# np.array([accuracy_score(get_prob_top_n(tree_smote.predict_proba(x_test), n), y_test) for n in range(11)]).cumsum()
+
+# tree.fit(x_train_smote, y_train_smote)
+# np.array([accuracy_score(get_prob_top_n(tree.predict_proba(x_test), n), y_test) for n in range(11)]).cumsum()
 
 # # Plot tree
 # import graphviz
 # from sklearn import tree
-# dot_data = tree.export_graphviz(dtree, out_file=None,
-#                                 feature_names = [x_train.columns[i] for i in range(0, len(x_train.columns)) if estimators_RFECV['DecisionTreeClassifier'].support_[i]],
+# dot_data = tree.export_graphviz(tree_raw, out_file=None,
+#                                 feature_names = x_train_raw.columns,
 #                                 class_names = True,
 #                                 filled = True, rounded = True)
 # graph = graphviz.Source(dot_data, format="png")
-# save_path = os.path.join(IMAGE_DIRECTORY, 'tree', '1')
+# save_path = os.path.join(IMAGE_MODEL_DIRECTORY, 'DecisionTreeClassifier')
 # graph.render(save_path)
-
+#
 # # Feature Importance
-# dtree = DecisionTreeClassifier(**load_obj('Params_DecisionTreeClassifier'))
-# dtree.fit(x_train, y_train)
-#
-# dtree_feature_importance_df = pd.DataFrame(data = {'Column': x_train.columns, 'Feature Importance': dtree.feature_importances_})
-# dtree_feature_importance_df = dtree_feature_importance_df.sort_values(['Feature Importance'], ascending=False)
-#
+# dtree_feature_importance_df = get_feature_importance_by_tree(tree_raw, smote = '')
+# # dtree_feature_importance_df.iloc[:12, :].sum()
+# TOP = 12
 # fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
-# plt.bar(dtree_feature_importance_df.iloc[:TOP, :]['Column'], dtree_feature_importance_df.iloc[:TOP, :]['Feature Importance'])
+# plt.bar(dtree_feature_importance_df.iloc[:TOP, :]['Feature'], dtree_feature_importance_df.iloc[:TOP, :]['Feature Importance'])
 # plt.ylabel('Feature Importance')
 # plt.xlabel('Column')
-# plt.xticks(rotation=0)
-# title = 'Feature Importance (DecisionTree)'
+# plt.xticks(rotation=90)
+# title = 'Feature Importance of DecisionTree'
 # plt.title(title, loc = 'center', y=1.1, fontsize = 20)
-# saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
+# saved_path = os.path.join(IMAGE_MODEL_DIRECTORY, convert_title_to_filename(title))
 # plt.savefig(saved_path, dpi=200, bbox_inches="tight")
 
 
 """#### RandomForestClassifier"""
-rfc = RandomForestClassifier(random_state = SEED)
-param_grid_rfc = {'estimator__min_samples_split' : [10, 30, 50, 100, 200],
-                  'estimator__n_estimators': [25, 100, 200]}
-param_grid_rfc = {'estimator__min_samples_split' : [100],
-                  'estimator__n_estimators': [50]}
-gridsearcher_rfc = gridsearch_rfecv_estimator(estimator = rfc, param_grid = param_grid_rfc)
-load_obj('GridSearch_Best_Params_RandomForestClassifier')
+param_grid_rfc = {'min_samples_split' : [10, 30, 50, 100, 200],
+                  'n_estimators': [25, 100, 200]}
+param_grid_rfc = {'min_samples_split' : [400],
+                  'n_estimators': [50]}
+gridsearcher_rfc_raw = gridsearch_estimator(estimator = RandomForestClassifier(random_state = SEED), param_grid = param_grid_tree, smote = '',
+                x_train = x_train_raw, y_train = y_train_raw, x_val = x_val_raw, y_val = y_val_raw)
+gridsearcher_rfc_smote = gridsearch_estimator(estimator = RandomForestClassifier(random_state = SEED), param_grid = param_grid_rfc, smote = '_Smote',
+                x_train = x_train_smote, y_train = y_train_smote, x_val = x_val_raw, y_val = y_val_raw)
 
-rfc = RandomForestClassifier(**estimators_params['RandomForestClassifier'])
-rfc = train_clf(rfc, x_train, x_test)
-
-# # Feature Importance
-# rfc = RandomForestClassifier(**load_obj('Params_RandomForestClassifier'))
-# rfc.fit(x_train, y_train)
-#
-# rfc_feature_importance_df = pd.DataFrame(data = {'Column': x_train.columns, 'Feature Importance': rfc.feature_importances_})
-# rfc_feature_importance_df = rfc_feature_importance_df.sort_values(['Feature Importance'], ascending=False)
-#
-# TOP = 12
-# fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
-# plt.bar(rfc_feature_importance_df.iloc[:TOP, :]['Column'], rfc_feature_importance_df.iloc[:TOP, :]['Feature Importance'])
-# plt.ylabel('Feature Importance')
-# plt.xlabel('Column')
-# plt.xticks(rotation=45)
-# title = 'Feature Importance (RandomForest) (Top {})'.format(TOP)
-# plt.title(title, loc = 'center', y=1.1, fontsize = 20)
-# saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
-# plt.savefig(saved_path, dpi=200, bbox_inches="tight")
-
-# """#### XGBClassifier"""
-# xgb = XGBClassifier(seed=SEED)
-# param_grid_xgb = {'estimator__earning_rate': [.1, .3, .5], #default: .3
-#                   'estimator__max_depth': [2,4, 6,10], #default 2
-#                   'estimator__n_estimators': [10, 25, 50, 100],
-#                   'estimator__subsample': [0.5],
-#                   'estimator__colsample_bytree': [0.5],
-#                   'estimator__objective': ['multi:softprob'],}
-# param_grid_xgb = {'estimator__earning_rate': [.3], #default: .3
-#                   'estimator__max_depth': [4], #default 2
-#                   'estimator__n_estimators': [25],
-#                   'estimator__subsample': [0.5],
-#                   'estimator__colsample_bytree': [0.5],
-#                   'estimator__objective': ['multi:softprob'],}
-# grid_search_xgb = gridsearch_rfecv_estimator(estimator = xgb, param_grid = param_grid_xgb)
-# load_obj('GridSearch_Best_Params_XGBClassifier')
-#
-# xgb = XGBClassifier(**estimators_params['XGBClassifier'])
-# xgb = train_clf(xgb, x_train, x_test)
-
-
-xgb = XGBClassifier(**load_obj('Params_XGBClassifier'))
-xgb.fit(x_train, y_train)
-accuracy_score(xgb.predict(x_test), y_test)
+rfc_raw = RandomForestClassifier(**load_obj('Params_RandomForestClassifier'))
+rfc_raw = train_clf(rfc_raw, smote = '', x_train = x_train_raw, y_train = y_train_raw,
+                x_val = x_val_raw, y_val = y_val_raw, x_test = x_test, y_test = y_test)
+rfc_smote = DecisionrfcClassifier(**load_obj('Params_RandomForestClassifier_Smote'))
+rfc_smote = train_clf(rfc_smote, smote = '_Smote', x_train = x_train_smote, y_train = y_train_smote,
+                x_val = x_val_smote, y_val = y_val_smote, x_test = x_test, y_test = y_test)
 
 # Feature Importance
-xgb_feature_importance_df = pd.DataFrame(data = {'Column': x_train.columns, 'Feature Importance': xgb.feature_importances_})
-xgb_feature_importance_df = xgb_feature_importance_df.sort_values(['Feature Importance'], ascending=False)
-
+rfc_feature_importance_df = get_feature_importance_by_tree(rfc, smote = '')
 TOP = 12
 fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
-plt.bar(xgb_feature_importance_df.iloc[:TOP, :]['Column'], xgb_feature_importance_df.iloc[:TOP, :]['Feature Importance'])
+plt.bar(rfc_feature_importance_df.iloc[:TOP, :]['Feature'], rfc_feature_importance_df.iloc[:TOP, :]['Feature Importance'])
 plt.ylabel('Feature Importance')
 plt.xlabel('Column')
-plt.xticks(rotation=60)
-title = 'Feature Importance (XGBClassifier) (Top {})'.format(TOP)
+plt.xticks(rotation=90)
+title = 'Feature Importance of RandomForest (Top {})'.format(TOP)
 plt.title(title, loc = 'center', y=1.1, fontsize = 20)
-saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
+saved_path = os.path.join(IMAGE_MODEL_DIRECTORY, convert_title_to_filename(title))
+plt.savefig(saved_path, dpi=200, bbox_inches="tight")
+
+
+"""#### XGBClassifier"""
+param_grid_xgb = {'earning_rate': [.1, .3, .5], #default: .3
+                  'max_depth': [2,4, 6,10], #default 2
+                  'n_estimators': [10, 25, 50, 100],
+                  'subsample': [0.5],
+                  'colsample_bytree': [0.5],
+                  'objective': ['multi:softprob'],}
+param_grid_xgb = {'earning_rate': [.3], #default: .3
+                  'max_depth': [4], #default 2
+                  'n_estimators': [30],
+                  'subsample': [0.7],
+                  'colsample_bytree': [0.7],
+                  'objective': ['multi:softprob'],}
+gridsearcher_xgb_raw = gridsearch_estimator(estimator = XGBClassifier(seed=SEED), param_grid = param_grid_tree, smote = '',
+                x_train = x_train_raw, y_train = y_train_raw, x_val = x_val_raw, y_val = y_val_raw)
+gridsearcher_xgb_smote = gridsearch_estimator(estimator = XGBClassifier(seed=SEED), param_grid = param_grid_xgb, smote = '_Smote',
+                x_train = x_train_smote, y_train = y_train_smote, x_val = x_val_raw, y_val = y_val_raw)
+
+xgb_raw = XGBClassifier(**load_obj('Params_XGBClassifier'))
+xgb_raw = train_clf(xgb_raw, smote = '', x_train = x_train_raw, y_train = y_train_raw,
+                x_val = x_val_raw, y_val = y_val_raw, x_test = x_test, y_test = y_test)
+xgb_smote = XGBClassifier(**load_obj('Params_XGBClassifier_Smote'))
+xgb_smote = train_clf(xgb_smote, smote = '_Smote', x_train = x_train_smote, y_train = y_train_smote,
+                x_val = x_val_smote, y_val = y_val_smote, x_test = x_test, y_test = y_test)
+
+# Feature Importance
+xgb_feature_importance_df = get_feature_importance_by_tree(xgb, smote = '')
+TOP = 12
+fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+plt.bar(rfc_feature_importance_df.iloc[:TOP, :]['Feature'], rfc_feature_importance_df.iloc[:TOP, :]['Feature Importance'])
+plt.ylabel('Feature Importance')
+plt.xlabel('Column')
+plt.xticks(rotation=90)
+title = 'Feature Importance of XGBClassifier (Top {})'.format(TOP)
+plt.title(title, loc = 'center', y=1.1, fontsize = 20)
+saved_path = os.path.join(IMAGE_MODEL_DIRECTORY, convert_title_to_filename(title))
 plt.savefig(saved_path, dpi=200, bbox_inches="tight")
 
 
 """#### Neural Network"""
-
 # Neural Network
 import numpy
 import pandas
@@ -447,7 +363,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.utils import np_utils
 
 numpy.random.seed(SEED)
-x_train_values = x_train.values
+x_train_values = x_train_raw.values
 x_test_values = x_test.values
 y_train_cat = np_utils.to_categorical(y_train)
 
@@ -455,11 +371,11 @@ def get_model():
   # create model
   model = Sequential()
   model.add(Dense(64, input_dim=x_train_values.shape[1], activation='relu'))
-  model.add(Dropout(0.5))
+  model.add(Dropout(0.2))
   model.add(Dense(64, activation='relu'))
   model.add(Dense(32, activation='relu'))
-  model.add(Dropout(0.5))
-  model.add(Dense(12, activation='softmax'))
+  model.add(Dropout(0.3))
+  model.add(Dense(11, activation='softmax'))
   # Compile model
   model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
   return model
@@ -497,7 +413,6 @@ run_times_df['NeuralNetwork'] = [run_total]
 # eli5.show_weights(perm, feature_names = x_train.columns.tolist(), include_styles = True)
 
 
-
 # # list all data in history
 # print(history.history.keys())
 #
@@ -522,79 +437,13 @@ run_times_df['NeuralNetwork'] = [run_total]
 # plt.ylim(1.5, 0.8)
 # plt.legend(['train', 'test'], loc='bottom right', prop={'size': 18})
 # plt.savefig('NeuralNetwork_Loss_History')
-#
-# # model.save(os.path.join(MODEL_PATH, 'nn_2.h5')) # save model
-#
-# clf_name = 'NeuralNetwork'
-#
-# y_train_prob = model.predict(x_train)
-# y_test_prob = model.predict(x_test)
-# check_dir(TRAIN_RESULT_PATH)
-# (pd.DataFrame(y_train_prob)).to_csv(os.path.join(TRAIN_RESULT_PATH,"Prob_Train_{}.csv").format(clf_name), index = False)
-# (pd.DataFrame(y_test_prob)).to_csv(os.path.join(TRAIN_RESULT_PATH,"Prob_Test_{}.csv").format(clf_name), index = False)
-#
-# y_train_pred = y_train_prob.argmax(axis=-1)
-# train_result_df['y_train_pred_' + clf_name] = y_train_pred
-# y_test_pred = y_test_prob.argmax(axis=-1)
-# test_result_df['y_test_pred_' + clf_name] = y_test_pred
-#
-# accuracy_scores = []
-# accuracy_scores.append(accuracy_score(y_train_pred, y_train))
-# accuracy_scores.append(accuracy_score(y_test_pred, y_test))
-#
-# score_df = pd.DataFrame(data = {'Prediction': ['Train Prediction', 'Test Prediction'], 'Accuracy Score': accuracy_scores})
-# check_dir(TRAIN_RESULT_PATH)
-# score_df.to_csv(os.path.join(TRAIN_RESULT_PATH,'Scores_for_{}.csv').format(clf_name), index = False)
-# get_matrix(y_test = y_test, y_test_pred = y_test_pred,
-#             y_train = y_train, y_train_pred = y_train_pred,
-#             estimator_name = clf_name, label_encoder = label_encoder)
-# print(current_time() + ': Finish getting confusion matrix for ' + clf_name)
 
-# train_result_df.to_csv(os.path.join(TRAIN_RESULT_PATH, 'Predicts_Train.csv'), index = False)
-# test_result_df.to_csv(os.path.join(TRAIN_RESULT_PATH, 'Predicts_Test.csv'), index = False)
-# run_times_df.to_csv(os.path.join(TRAIN_RESULT_PATH, 'Run_Time.csv'), index = False)
-# train_result_df
-# test_result_df
-# run_times_df
+# model.save(os.path.join(MODEL_PATH, 'nn_2.h5')) # save model
 
-"""#### Model Comparison"""
-# Runtime
-run_times_df = pd.read_csv(os.path.join(TRAIN_RESULT_PATH, 'Run_Time.csv'))
+clf_name = 'NeuralNetwork'
+y_train_prob = model.predict(x_train)
+y_test_prob = model.predict(x_test)
+np.save(os.path.join(TRAIN_RESULT_PATH, "Prob_Train_{}.npy").format(clf_name), y_train_prob)
+np.save(os.path.join(TRAIN_RESULT_PATH, "Prob_Test_{}.npy").format(clf_name), y_test_prob)
 
-fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
-plt.plot(run_times_df.transpose().rename(columns = {0: 'Run Time (sec)'}))
-plt.ylabel('Run Time (sec)')
-plt.xlabel('Model')
-title = 'Runtime Across Models'
-plt.title(title, loc = 'center', y=1.1, fontsize = 20)
-saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
-plt.savefig(saved_path, dpi=200, bbox_inches="tight")
-
-# Accuracy
-score_filenames = [file for file in os.listdir(TRAIN_RESULT_PATH) if file.startswith('Scores_for_')]
-score_dict = {}
-for filename in score_filenames:
-    estimatorName = filename.replace('Scores_for_', '').replace('.csv', '')
-    score_df = pd.read_csv(os.path.join(TRAIN_RESULT_PATH, filename))
-    score_df = score_df.rename(columns = {'Accuracy Score': estimatorName})
-    score_dict[estimatorName] = score_df
-scores_df = pd.concat([score_dict['LogisticRegression'],
-                       score_dict['DecisionTreeClassifier'],
-                       score_dict['RandomForestClassifier'],
-                       score_dict['XGBClassifier'],
-                       score_dict['NeuralNetwork']], axis = 1)
-scores_df = scores_df.drop(columns = 'Prediction')
-train_score_df = scores_df.iloc[:1, :]
-test_score_df = scores_df.iloc[1:, :]
-
-fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
-plt.plot(train_score_df.transpose().rename(columns = {0: 'Accuracy (Train)'}), label='Accuracy (Train)')
-plt.plot(test_score_df.transpose().rename(columns = {0: 'Accuracy (Test)'}), label='Accuracy (Test)')
-plt.ylim(0.6, 0.7)
-plt.ylabel('Accuracy %')
-plt.xlabel('Model')
-plt.legend()
-title = 'Accuracy Scores Across Models'
-plt.title(title, loc = 'center', y=1.1, fontsize = 20)
-saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
-fig.savefig(saved_path, dpi=200, bbox_inches="tight")
+run_times_df.to_csv(os.path.join(TRAIN_RESULT_PATH, 'Run_Time.csv'), index = False)
