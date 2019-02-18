@@ -14,20 +14,15 @@ WORKING_DIR = '/Users/anqitu/Workspaces/NTU/Airbnb-new-user-bookings'
 # os.listdir(WORKING_DIR)
 
 """#### Import libraries"""
-
 import numpy as np
 import pandas as pd
 from util import *
-
-WITH_NDF = True
+pd.options.display.float_format = '{:,.5%}'.format
 
 """#### Loading data"""
 users = pd.read_csv(os.path.join(WORKING_DIR, 'raw_data/users.csv'))
-if not WITH_NDF:
-    users = users[users['country_destination'] != 'NDF']
 users.isnull().sum()
 users.shape
-
 
 """#### Clean users"""
 # There are '-unknown-' values for 'gender' (129480), 'language' (1), 'first_browser' (44394) column
@@ -41,11 +36,11 @@ users['first_affiliate_tracked'].replace(np.nan, 'untracked', inplace=True)
 """#### age """
 # There are outliers for 'age' column (1-5 / >100 / 2014) --> TODO: Identify outliers. Correct those ages entered as year
 # For the ages above 150, the users have inserted their year of birth instead of age. We can fix this by subtracting the given year from the current year (for this dataset it was 2015) to get the age of the user. For ages less than 15, they can be considered as incorrect inputs and can be filtered out.
-plot_continuous_distribution_as_box(data = users, continuous_column = 'age', save = True, title = 'Distribution of Age')
+# plot_continuous_distribution_as_box(data = users, continuous_column = 'age', save = True, title = 'Distribution of Age')
 
 users['age_fix'] = users['age']
 users.loc[users['age_fix']>1500,'age_fix'] = 2015 - users.loc[users['age_fix']>1500,'age_fix']
-plot_continuous_distribution_as_box(data = users, continuous_column = 'age_fix', save = True, title = 'Distribution of Age (Fixed)')
+# plot_continuous_distribution_as_box(data = users, continuous_column = 'age_fix', save = True, title = 'Distribution of Age (Fixed)')
 # users.age.describe()
 
 # Set 'age' outliers as NA
@@ -57,7 +52,7 @@ labels = [str(i) + '-' + str(i+4) for i in range(15, 95, 5)]
 users['age_bkt'] = pd.cut(users['age_fix'], bins = range(15, 100, 5), labels = labels)
 users['age_bkt'].replace(np.nan, 'NA', inplace = True)
 users['age_bkt'].value_counts()
-plot_catogory_distribution(data = users, column_name = 'age_bkt', percentage = True, save = True, show = True, title = 'Percentage Distribution of Age Bucket')
+# plot_catogory_distribution(data = users, column_name = 'age_bkt', percentage = True, save = True, show = True, title = 'Percentage Distribution of Age Bucket')
 
 """#### datetime """
 # Most date columns are not date objects --> TODO: Convert to datetime object
@@ -74,13 +69,7 @@ last_date = users[['date_account_created', 'date_first_active', 'date_first_book
 first_month = first_date.month
 first_year = first_date.year
 
-week_map = {0: 'Monday',
-            1: 'Tuesday',
-            2: 'Wednesday',
-            3: 'Thursday',
-            4: 'Friday',
-            5: 'Saturday',
-            6: 'Sunday'}
+week_map = {0: 'Monday', 1: 'Tuesday', 2: 'Wednesday', 3: 'Thursday', 4: 'Friday', 5: 'Saturday', 6: 'Sunday'}
 
 for col in ['date_account_created', 'date_first_active', 'date_first_booking']:
     users[col + '_year'] = users[col].dt.year
@@ -143,7 +132,7 @@ for col in ['date_account_created', 'date_first_active', 'date_first_booking']:
 
 # first_device --> map to device and system
 get_percentage(users, 'first_device_type')
-plot_catogory_distribution(data = users, column_name = 'first_device_type', percentage = True, save = True, show = True, title = 'Percentage Distribution of Device Type', rot = 45)
+# plot_catogory_distribution(data = users, column_name = 'first_device_type', percentage = True, save = True, show = True, title = 'Percentage Distribution of Device Type', rot = 45)
 device_map = {
     'Mac Desktop': 'Desktop',
     'Windows Desktop': 'Desktop',
@@ -183,7 +172,7 @@ get_percentage(users, 'affiliate_provider')
 users['affiliate_provider'] = users['affiliate_provider'].replace('facebook-open-graph', 'facebook')\
                                                          .replace('email-marketing', 'email')
 get_percentage(users, 'affiliate_provider')
-convert_minority_to_others(data = users, column_name = 'affiliate_provider', minority_counts = 3)
+convert_minority_to_others(data = users, column_name = 'affiliate_provider', minority_counts = 8)
 get_percentage(users, 'affiliate_provider_min_to_other')
 
 # age_bkt --> convert those less than 1%
@@ -194,7 +183,7 @@ users['age_bkt_min_to_other'] = users['age_bkt_min_to_other'].replace('other', '
 get_percentage(users, 'age_bkt_min_to_other')
 
 get_percentage(users, 'language')
-convert_minority_to_others(data = users, column_name = 'language', minority_counts = 15)
+convert_minority_to_others(data = users, column_name = 'language', minority_counts = 16)
 get_percentage(users, 'language_min_to_other')
 
 # first_affiliate_tracked --> convert those less than 1%
@@ -204,7 +193,7 @@ get_percentage(users, 'first_affiliate_tracked_min_to_other')
 
 # first_browser --> convert those less than 1%
 get_percentage(users, 'first_browser')
-convert_minority_to_others(data = users, column_name = 'first_browser', minority_counts = 43)
+convert_minority_to_others(data = users, column_name = 'first_browser', minority_counts = 44)
 get_percentage(users, 'first_browser_min_to_other')
 
 # signup_flow
@@ -212,11 +201,12 @@ get_percentage(users, 'signup_flow')
 convert_minority_to_others(data = users, column_name = 'signup_flow', minority_counts = 7)
 get_percentage(users, 'signup_flow_min_to_other')
 
-if WITH_NDF:
-    users.to_csv(USERS_WITH_NDF_MIN_TO_OTHERS_PATH, index = False)
-else:
-    users.to_csv(USERS_MIN_TO_OTHERS_PATH, index = False)
+users_all = users.copy()
+users = users[users['country_destination'] != 'NDF']
+users_all.to_csv(USERS_WITH_NDF_PATH, index = False)
+users.to_csv(USERS_PATH, index = False)
 
 # users.columns[users.isnull().any()]
 # users.isnull().sum()
 # users.shape
+# users.nunique()

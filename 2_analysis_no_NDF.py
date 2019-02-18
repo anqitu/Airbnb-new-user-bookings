@@ -11,15 +11,7 @@
 """
 ## 1. Environment Setup
 """
-
-import os
-os.getcwd()
-# if connect to local
-# WORKING_DIR = 'C:/Users/Weixian/Documents/Y3S2/Analytics II/airbnb_new_user_booking'
 WORKING_DIR = '/Users/anqitu/Workspaces/NTU/Airbnb-new-user-bookings'
-# if connect to hosted
-# WORKING_DIR = '/content'
-# os.listdir(WORKING_DIR)
 
 """#### Import libraries"""
 import numpy as np
@@ -61,18 +53,18 @@ users['booking_active_diff'] = users['date_first_booking_day_count'] - users['da
 users['account_active_diff'] = users['date_account_created_day_count'] - users['date_first_active_day_count']
 users['booking_account_diff'] = users['date_first_booking_day_count'] - users['date_account_created_day_count']
 for col in ['date_account_created', 'date_first_active', 'date_first_booking']:
-    users[col + '_year_month'] = users.apply(lambda row: date(row[col + '_year'], row[col + '_month'], 1), axis = 1)
-
+    users[col + '_year_month'] = users.apply(lambda row: np.nan if pd.isna(row[col])
+                    else date(int(row[col + '_year']), int(row[col + '_month']), 1), axis = 1)
 users['has_age'] = (users['age_bkt'] != 'NA')
 
 """#### Useful sub-data and features """
+users_has_destination = users[users['country_destination'] != 'NDF']
+users_not_US = users_has_destination[users_has_destination['country_destination'] != 'US']
+
 users['has_destination'] = (users['country_destination'] != 'NDF')
 users['has_destination_num'] = users['has_destination'].astype(int)
-users_has_destination = users[users['country_destination'] != 'NDF']
-users['booking_active_diff'] = users['date_first_booking_day_count'] - users['date_first_active_dayofyear']
-users['to_US'] = (users['country_destination'] == 'US')
-users_not_US = users[users['country_destination'] != 'US']
-
+users_has_destination['to_US'] = (users_has_destination['country_destination'] == 'US')
+users_has_destination['to_US_num'] = users_has_destination['to_US'].astype(int)
 first_date = users[['date_account_created', 'date_first_active', 'date_first_booking']].min().min()
 last_date = users[['date_account_created', 'date_first_active']].max().max()
 
@@ -82,9 +74,9 @@ last_date = users[['date_account_created', 'date_first_active']].max().max()
 #                         'signup_app', 'signup_method', 'signup_flow', # a key to particular pages - an index for an enumerated list.
 #                         'has_age', 'age_bkt']
 
-categorical_features = ['country_destination', 'to_US',
+categorical_features = ['country_destination', 'has_destination',
                         'gender',
-                        'language', 'language_map_country',
+                        'language', 'language_min_to_other',
                         'affiliate_channel',
                         'affiliate_provider', 'affiliate_provider_min_to_other',
                         'first_browser', 'first_browser_min_to_other',
@@ -98,7 +90,7 @@ categorical_features = ['country_destination', 'to_US',
 
 continuous_features = ['age', 'age_fix',
                        'booking_active_diff', 'account_active_diff', 'booking_account_diff',
-                       'date_account_created_to_next_holiday', 'date_first_active_to_next_holiday', 'date_first_booking_to_next_holiday']
+                       'date_account_created_days_to_next_holiday', 'date_first_active_days_to_next_holiday', 'date_first_booking_days_to_next_holiday']
 
 time_features = ['date_account_created',
                 'date_first_booking',
@@ -111,6 +103,7 @@ time_features = ['date_account_created',
                 'date_account_created_year_count',
                 'date_account_created_month_count',
                 'date_account_created_day_count',
+                'date_account_created_year_month',
 
                 'date_first_active_year',
                 'date_first_active_month',
@@ -119,6 +112,7 @@ time_features = ['date_account_created',
                 'date_first_active_year_count',
                 'date_first_active_month_count',
                 'date_first_active_day_count',
+                'date_first_active_year_month',
 
                 'date_first_booking_year',
                 'date_first_booking_month',
@@ -126,14 +120,16 @@ time_features = ['date_account_created',
                 'date_first_booking_dayofyear',
                 'date_first_booking_year_count',
                 'date_first_booking_month_count',
-                'date_first_booking_day_count']
+                'date_first_booking_day_count',
+                'date_first_booking_year_month',]
 
-country_columns = ['ASIA', 'AU', 'CA', 'DE', 'ES', 'EU(Other)', 'FR', 'GB', 'IT', 'PT', 'US']
+mapped_features = [feature for feature in categorical_features if feature.endswith('_min_to_other')]
+for feature in mapped_features:
+    users[feature.replace('_min_to_other', '')] = users[feature]
+    categorical_features.remove(feature)
 
-set(users.columns).difference(set(categorical_features)) \
-                  .difference(set(continuous_features)) \
-                  .difference(set(time_features)) \
-                  .difference(set(country_columns))
+users[categorical_features + continuous_features + time_features].shape
+set(users.columns).difference(set(categorical_features)).difference(set(continuous_features)).difference(set(time_features))
 
 """## 3. Plot
 - General

@@ -21,19 +21,10 @@ WORKING_DIR = '/Users/anqitu/Workspaces/NTU/Airbnb-new-user-bookings'
 SEED = 2019
 USERS_PATH = os.path.join(WORKING_DIR, 'data/users.csv')
 USERS_WITH_NDF_PATH = os.path.join(WORKING_DIR, 'data/users_with_NDF.csv')
-USERS_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/users_min_to_others.csv')
-USERS_WITH_NDF_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/users_with_NDF_min_to_others.csv')
 
 TEST_PATH = os.path.join(WORKING_DIR, 'data/test.csv')
-TRAIN_RAW_PATH = os.path.join(WORKING_DIR, 'data/train_raw.csv')
-VAL_RAW_PATH = os.path.join(WORKING_DIR, 'data/val_raw.csv')
-TRAIN_SMOTE_PATH = os.path.join(WORKING_DIR, 'data/train_smote.csv')
-VAL_SMOTE_PATH = os.path.join(WORKING_DIR, 'data/val_smote.csv')
-
-TRAIN_RAW_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/train_raw_min_to_others.csv')
-VAL_RAW_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/val_raw_min_to_others.csv')
-TRAIN_SMOTE_MIN_TO_OTHERS_PATH =  os.path.join(WORKING_DIR, 'data/train_smote_min_to_others.csv')
-VAL_SMOTE_MIN_TO_OTHERS_PATH = os.path.join(WORKING_DIR, 'data/val_smote_min_to_others.csv')
+TRAIN_PATH = os.path.join(WORKING_DIR, 'data/train.csv')
+VAL_PATH = os.path.join(WORKING_DIR, 'data/val.csv')
 
 IMAGE_DIRECTORY = os.path.join(WORKING_DIR, 'images')
 IMAGE_PIE_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'pie')
@@ -49,11 +40,6 @@ IMAGE_TIME_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'time')
 TRAIN_RESULT_PATH = os.path.join(WORKING_DIR, 'training_result')
 MODEL_PATH = os.path.join(WORKING_DIR, 'models')
 IMAGE_MODEL_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'model')
-
-SAMPLED_TRAIN_RESULT_PATH = os.path.join(WORKING_DIR, 'training_result_sampled')
-SAMPLED_MODEL_PATH = os.path.join(WORKING_DIR, 'models_sampled')
-SAMPLED_IMAGE_MODEL_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'model_sampled')
-
 
 """General"""
 def check_dir(directory):
@@ -73,6 +59,11 @@ def save_obj(obj, name):
 def load_obj(name):
     with open(os.path.join(TRAIN_RESULT_PATH, name + '.pkl'), 'rb') as f:
         return pickle.load(f)
+
+def convert_title_to_filename(title):
+    for unacceptable in [' ', ':', '.', '(', ')']:
+        title = title.replace(unacceptable, '_')
+    return title
 
 """Check Data"""
 def display_null_percentage(data):
@@ -101,6 +92,7 @@ def convert_minority_to_others(data, column_name, minority_counts = 0):
 
 """Save & Load Models"""
 def save_label_encoder(label_encoder, model_name):
+    check_dir(MODEL_PATH)
     np.save(os.path.join(MODEL_PATH, model_name + '.npy'), label_encoder.classes_)
 
 from sklearn.preprocessing import LabelEncoder
@@ -111,17 +103,13 @@ def load_label_encoder(model_name):
 
 import pickle
 def save_model(model, model_name):
+    check_dir(MODEL_PATH)
     pickle.dump(model, open(os.path.join(MODEL_PATH, model_name + '.sav'), 'wb'))
 
 def load_model(model_name):
     return pickle.load(open(os.path.join(MODEL_PATH, model_name + '.sav'), 'rb'))
 
 """Plotting"""
-def convert_title_to_filename(title):
-    for unacceptable in [' ', ':', '.', '(', ')']:
-        title = title.replace(unacceptable, '_')
-    return title
-
 def convert_column_name_to_title(column_name):
     return column_name.replace('_', ' ').title()
 
