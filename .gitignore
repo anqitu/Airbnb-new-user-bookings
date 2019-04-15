@@ -22,3 +22,13 @@ run1_after2014/
 training_result/
 
 *.pyc
+
+keep/
+
+*.csv
+
+*.pbix
+
+\.RDataTmp
+
+\.Rhistory

@@ -378,3 +378,16 @@
 # languages_mapped = language_encoded_df.columns
 # language_encoded_df['id'] = language_df['id']
 # users = users.merge(language_encoded_df, how = 'left')
+
+
+
+# TOP = 12
+# fig = plt.figure(facecolor='w', figsize=(PLOT_WIDTH, PLOT_HEIGHT))
+# plt.bar(lr_abs_coefs_df.iloc[:TOP, :]['Column'], lr_abs_coefs_df.iloc[:TOP, :]['Coefficient Abosolute Average'])
+# plt.ylabel('Coefficient Abosolute Average')
+# plt.xlabel('Column')
+# plt.xticks(rotation=45)
+# title = 'Coefficient Abosolute Average of Columns (Top {})'.format(TOP)
+# plt.title(title, loc = 'center', y=1.1, fontsize = 20)
+# saved_path = os.path.join(IMAGE_MODEL_DIRECTORY, convert_title_to_filename(title))
+# plt.savefig(saved_path, dpi=200, bbox_inches="tight")

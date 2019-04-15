@@ -20,11 +20,15 @@ WORKING_DIR = '/Users/anqitu/Workspaces/NTU/Airbnb-new-user-bookings'
 
 SEED = 2019
 USERS_PATH = os.path.join(WORKING_DIR, 'data/users.csv')
+SESSION_PATH = os.path.join(WORKING_DIR, 'data/sessions.csv')
 USERS_WITH_NDF_PATH = os.path.join(WORKING_DIR, 'data/users_with_NDF.csv')
+USERS_ANALYSIS_PATH = os.path.join(WORKING_DIR, 'data/users_analysis.csv')
+USERS_WITH_NDF_ANALYSIS_PATH = os.path.join(WORKING_DIR, 'data/users_with_NDF_analysis.csv')
 
-TEST_PATH = os.path.join(WORKING_DIR, 'data/test.csv')
-TRAIN_PATH = os.path.join(WORKING_DIR, 'data/train.csv')
-VAL_PATH = os.path.join(WORKING_DIR, 'data/val.csv')
+USERS_PLOT_PATH = os.path.join(WORKING_DIR, 'data/users_plot.csv')
+USERS_DEST_PATH_R = os.path.join(WORKING_DIR, 'data/users_dest_r.csv')
+USERS_DURATION_PATH_R = os.path.join(WORKING_DIR, 'data/users_duration_r.csv')
+
 
 IMAGE_DIRECTORY = os.path.join(WORKING_DIR, 'images')
 IMAGE_PIE_DIRECTORY = os.path.join(IMAGE_DIRECTORY, 'pie')
@@ -60,7 +64,7 @@ def load_obj(name):
     with open(os.path.join(TRAIN_RESULT_PATH, name + '.pkl'), 'rb') as f:
         return pickle.load(f)
 
-def convert_title_to_filename(title):
+def convert_filename(title):
     for unacceptable in [' ', ':', '.', '(', ')']:
         title = title.replace(unacceptable, '_')
     return title
@@ -136,7 +140,7 @@ def plot_pie(data, column_name, title = None, save = False, show = True):
 
     if save:
         check_dir(IMAGE_PIE_DIRECTORY)
-        saved_path = os.path.join(IMAGE_PIE_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_PIE_DIRECTORY, convert_filename(title))
         fig.savefig(saved_path, dpi=200, bbox_inches="tight")
         print('Saved to {}'.format(saved_path))
     if show:
@@ -166,7 +170,7 @@ def plot_catogory_distribution(data, column_name, title = None, percentage = Fal
 
     if save:
         check_dir(IMAGE_BAR_DIRECTORY)
-        saved_path = os.path.join(IMAGE_BAR_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_BAR_DIRECTORY, convert_filename(title))
         fig.savefig(saved_path, dpi=200, bbox_inches="tight")
         print('Saved to {}'.format(saved_path))
     if show:
@@ -186,7 +190,7 @@ def plot_continuous_distribution_as_bar(data, column_name, title = None, bins = 
 
     if save:
         check_dir(IMAGE_BIN_DIRECTORY)
-        saved_path = os.path.join(IMAGE_BIN_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_BIN_DIRECTORY, convert_filename(title))
         fig.savefig(saved_path, dpi=200, bbox_inches="tight")
         print('Saved to {}'.format(saved_path))
     if show:
@@ -207,7 +211,7 @@ def plot_continuous_distribution_as_box(data, continuous_column, category_column
 
     if save:
         check_dir(IMAGE_BOX_DIRECTORY)
-        saved_path = os.path.join(IMAGE_BOX_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_BOX_DIRECTORY, convert_filename(title))
         fig.savefig(saved_path, dpi=200, bbox_inches="tight")
         print('Saved to {}'.format(saved_path))
     if show:
@@ -240,7 +244,7 @@ def plot_category_stacked_bar(data, x_column, y_column, percentage = False, titl
 
     if save:
         check_dir(IMAGE_BARS_DIRECTORY)
-        saved_path = os.path.join(IMAGE_BARS_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_BARS_DIRECTORY, convert_filename(title))
         plt.savefig(saved_path, dpi=200, bbox_inches="tight")
         plt.show()
         print('Saved to {}'.format(saved_path))
@@ -249,9 +253,9 @@ def plot_category_stacked_bar(data, x_column, y_column, percentage = False, titl
 
     plt.close()
 
-def plot_category_clustered_bar(data,level_1, level_2, title = None, save = False, show = True):
+def plot_category_clustered_bar(data,level_1, level_2, title = None, save = False, show = True, order = None):
 
-    sns.catplot(data = data, x = level_1, hue = level_2, kind = "count", height = PLOT_HEIGHT, aspect = 1.618)
+    sns.catplot(data = data, x = level_1, hue = level_2, kind = "count", height = PLOT_HEIGHT, aspect = 1.618, order = order)
     if title is None:
         title = 'Distribution of ' + level_2 + ' By ' + level_1 + ' (Clustered)'
 
@@ -260,7 +264,7 @@ def plot_category_clustered_bar(data,level_1, level_2, title = None, save = Fals
 
     if save:
         check_dir(IMAGE_BARS_DIRECTORY)
-        saved_path = os.path.join(IMAGE_BARS_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_BARS_DIRECTORY, convert_filename(title))
         plt.savefig(saved_path, dpi=200, bbox_inches="tight")
         plt.show()
         print('Saved to {}'.format(saved_path))
@@ -273,29 +277,29 @@ def plot_bubble(data, column_name, target, title = None, save = False, show = Tr
     df = data.reset_index().groupby([column_name]).agg({target:'mean',
                                         'index':'count'}).reset_index().rename(columns = {'index': 'Total Count'})
     ratio = df['Total Count'].max() / 3000
-    fig = sns.relplot(x="Total Count", y=target, size="Total Count", hue="Total Count", palette="Blues",
+    fig = sns.relplot(x="Total Count", y=target, size="Total Count", palette="Blues",
                     sizes=(df['Total Count'].min() / ratio, 5000),
-                    data=df, height=PLOT_HEIGHT, aspect=1.618, legend = False)
+                    data=df, height=PLOT_HEIGHT, aspect=1.618, legend = False, alpha = 0.5)
     bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.4)
     for line in range(0,df.shape[0]):
-         plt.text(df["Total Count"].iloc[line] * 1.01, df[target].iloc[line] * 1.05, df[df.columns[0]].iloc[line],
-            bbox=bbox_props, horizontalalignment='left', size='large', color='black', fontsize = 12)
+         plt.text(df["Total Count"].iloc[line] * 0.97, df[target].iloc[line] * 1.02, df[df.columns[0]].iloc[line],
+            bbox=bbox_props, horizontalalignment='left', size='large', color='black', fontsize = 8)
     if title is None:
-        title = 'Subscription Rate vc Total Count by ' + column_name.replace('_', ' ').replace('.', ' ').title()
+        title = 'Booking Rate vc Total Count by ' + column_name.replace('_', ' ').replace('.', ' ').title()
 
     plt.xlim(-df['Total Count'].max()*0.01, df['Total Count'].max()*1.1)
     plt.ylim(0, df[target].max()*1.1)
     x = np.linspace(0, df['Total Count'].max()*1.1, df['Total Count'].max()*1.1)
-    y = [df[target].mean()] * len(x)
+    y = [data[target].mean()] * len(x)
     plt.ylabel('Booking Rate')
     plt.plot(x, y, linewidth = 2, color = '#2fb7b7')
-    plt.text(df["Total Count"].iloc[-1] * -0.01, y[0] * 1.05, 'Average', horizontalalignment='left', size='large', color='#2fb7b7', fontsize = 20)
+    plt.text(df["Total Count"].iloc[-1] * 0.8, y[0] * 1.05, 'Average', horizontalalignment='left', size='large', color='#2fb7b7', fontsize = 20)
     plt.title(title, loc = 'center', y=1.3, fontsize = 20)
     plt.tight_layout()
 
     if save:
         check_dir(IMAGE_BUBBLE_DIRECTORY)
-        saved_path = os.path.join(IMAGE_BUBBLE_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_BUBBLE_DIRECTORY, convert_filename(title))
         plt.savefig(saved_path, dpi=200, bbox_inches="tight")
         plt.show()
         print('Saved to {}'.format(saved_path))
@@ -312,7 +316,7 @@ def plot_pairs(data,column_names, title = None, save = False, show = True):
 
     if save:
         check_dir(IMAGE_GENERAL_DIRECTORY)
-        saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_GENERAL_DIRECTORY, convert_filename(title))
         plt.savefig(saved_path, dpi=200, bbox_inches="tight")
         plt.show()
         print('Saved to {}'.format(saved_path))
@@ -335,7 +339,7 @@ def plot_month_week_heatmap(data, title = None, save = False, show = True):
 
     if save:
         check_dir(IMAGE_TIME_DIRECTORY)
-        saved_path = os.path.join(IMAGE_TIME_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_TIME_DIRECTORY, convert_filename(title))
         fig.savefig(saved_path, dpi=200, bbox_inches="tight")
         print('Saved to {}'.format(saved_path))
     if show:
@@ -377,7 +381,7 @@ def plot_confusion_matrix(cm, classes, normalize=False, title=None, cmap=plt.cm.
 
     if save:
         check_dir(IMAGE_MATRIX_DIRECTORY)
-        saved_path = os.path.join(IMAGE_MATRIX_DIRECTORY, convert_title_to_filename(title))
+        saved_path = os.path.join(IMAGE_MATRIX_DIRECTORY, convert_filename(title))
         plt.savefig(saved_path, dpi=200, bbox_inches="tight")
         plt.show()
         print('Saved to {}'.format(saved_path))
@@ -392,11 +396,11 @@ def get_matrix(y_test, y_test_pred, y_train, y_train_pred, estimator_name, label
 
     title = 'Confusion Matrix for ' + estimator_name + ' Test'
     df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_test), name='True'), pd.Series(label_encoder.inverse_transform(y_test_pred), name='Predict'))
-    df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_title_to_filename(title) + '.csv'))
+    df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_filename(title) + '.csv'))
     plot_confusion_matrix(confusion_matrix(y_test, y_test_pred), label_encoder.classes_, title = title, save = True)
 
     title = 'Confusion Matrix for ' + estimator_name  + ' Train'
 
     df_confusion = pd.crosstab(pd.Series(label_encoder.inverse_transform(y_train), name='True'), pd.Series(label_encoder.inverse_transform(y_train_pred), name='Predict'))
-    df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_title_to_filename(title) + '.csv'))
+    df_confusion.to_csv(os.path.join(TRAIN_RESULT_PATH, convert_filename(title) + '.csv'))
     plot_confusion_matrix(confusion_matrix(y_train, y_train_pred), label_encoder.classes_, title = title, save = True)

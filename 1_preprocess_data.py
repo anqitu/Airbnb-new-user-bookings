@@ -1,17 +1,12 @@
 """
 #### Preprocess for EDA & Modelling
-- Clean users and sessions
+- Clean users data (NA and outliers)
 - Feature Engineering
-- Merge users and sessions
+- Convert minority (no statistical power) to other
 """
-
 import os
 os.getcwd()
-# if connect to local
 WORKING_DIR = '/Users/anqitu/Workspaces/NTU/Airbnb-new-user-bookings'
-# if connect to hosted
-# WORKING_DIR = '/content'
-# os.listdir(WORKING_DIR)
 
 """#### Import libraries"""
 import numpy as np
@@ -20,9 +15,15 @@ from util import *
 pd.options.display.float_format = '{:,.5%}'.format
 
 """#### Loading data"""
-users = pd.read_csv(os.path.join(WORKING_DIR, 'raw_data/users.csv'))
+# path = 'raw_data/users_modelling.csv'
+path = 'raw_data/users_analysis.csv'
+users = pd.read_csv(os.path.join(WORKING_DIR, path))
+get_percentage(users[users['country_destination'] != 'NDF'], 'country_destination')['%'].iloc[:5].sum()
+
+# users = users[users['country_destination'] != 'NDF']
 users.isnull().sum()
 users.shape
+
 
 """#### Clean users"""
 # There are '-unknown-' values for 'gender' (129480), 'language' (1), 'first_browser' (44394) column
@@ -50,7 +51,7 @@ users.loc[users['age_fix'] < 15, 'age_fix'] = np.nan
 # # Create bucket for 'age' columns
 labels = [str(i) + '-' + str(i+4) for i in range(15, 95, 5)]
 users['age_bkt'] = pd.cut(users['age_fix'], bins = range(15, 100, 5), labels = labels)
-users['age_bkt'].replace(np.nan, 'NA', inplace = True)
+users['age_bkt'].replace(np.nan, 'unknown', inplace = True)
 users['age_bkt'].value_counts()
 # plot_catogory_distribution(data = users, column_name = 'age_bkt', percentage = True, save = True, show = True, title = 'Percentage Distribution of Age Bucket')
 
@@ -167,19 +168,18 @@ get_percentage(users, 'first_os')
 #     users.to_csv(USERS_PATH, index = False)
 
 """#### categories with too many levels which have low freuencies """
-# affiliate_provider --> convert those less than 0.1%
+# affiliate_provider --> convert those less than 1%
 get_percentage(users, 'affiliate_provider')
-users['affiliate_provider'] = users['affiliate_provider'].replace('facebook-open-graph', 'facebook')\
-                                                         .replace('email-marketing', 'email')
+users['affiliate_provider'] = users['affiliate_provider'].replace('facebook-open-graph', 'facebook')
 get_percentage(users, 'affiliate_provider')
-convert_minority_to_others(data = users, column_name = 'affiliate_provider', minority_counts = 8)
+convert_minority_to_others(data = users, column_name = 'affiliate_provider', minority_counts = 10)
 get_percentage(users, 'affiliate_provider_min_to_other')
 
 # age_bkt --> convert those less than 1%
 get_percentage(users, 'age_bkt')
-convert_minority_to_others(data = users, column_name = 'age_bkt', minority_counts = 3)
+convert_minority_to_others(data = users, column_name = 'age_bkt', minority_counts = 6)
 get_percentage(users, 'age_bkt_min_to_other')
-users['age_bkt_min_to_other'] = users['age_bkt_min_to_other'].replace('other', '80+')
+users['age_bkt_min_to_other'] = users['age_bkt_min_to_other'].replace('other', '65+')
 get_percentage(users, 'age_bkt_min_to_other')
 
 get_percentage(users, 'language')
@@ -188,7 +188,7 @@ get_percentage(users, 'language_min_to_other')
 
 # first_affiliate_tracked --> convert those less than 1%
 get_percentage(users, 'first_affiliate_tracked')
-convert_minority_to_others(data = users, column_name = 'first_affiliate_tracked', minority_counts = 2)
+convert_minority_to_others(data = users, column_name = 'first_affiliate_tracked', minority_counts = 3)
 get_percentage(users, 'first_affiliate_tracked_min_to_other')
 
 # first_browser --> convert those less than 1%
@@ -198,15 +198,28 @@ get_percentage(users, 'first_browser_min_to_other')
 
 # signup_flow
 get_percentage(users, 'signup_flow')
-convert_minority_to_others(data = users, column_name = 'signup_flow', minority_counts = 7)
+convert_minority_to_others(data = users, column_name = 'signup_flow', minority_counts = 10)
 get_percentage(users, 'signup_flow_min_to_other')
 
+mapped_features = [feature for feature in users.columns if feature.endswith('_min_to_other')]
+for mapped_feature in mapped_features:
+    users[mapped_feature.replace('_min_to_other', '')] = users[mapped_feature]
+    users = users.drop(columns = mapped_feature)
+
+users['signup_flow'] = users['signup_flow'].astype(str)
 users_all = users.copy()
 users = users[users['country_destination'] != 'NDF']
-users_all.to_csv(USERS_WITH_NDF_PATH, index = False)
-users.to_csv(USERS_PATH, index = False)
+
+if path == 'raw_data/users_modelling.csv':
+    users_all.to_csv(USERS_WITH_NDF_PATH, index = False)
+    users.to_csv(USERS_PATH, index = False)
+else:
+    users_all.to_csv(USERS_WITH_NDF_ANALYSIS_PATH, index = False)
+    users.to_csv(USERS_ANALYSIS_PATH, index = False)
+
 
 # users.columns[users.isnull().any()]
 # users.isnull().sum()
 # users.shape
 # users.nunique()
+# users['signup_flow'].value_counts()
